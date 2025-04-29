@@ -1,0 +1,28 @@
+I have Fakebook, which is a Facebook clone social media app. It has a React-Redux front-end styled by Bootsrtrap 4.3 
+and vanilla CSS. The back-end is Firebase. We have the backend.js file, which we work on the most. This connects the 
+Firebase back-end to the actual front-end. We will completely rewrite it with certain reducers to switch to a 
+completely different back-end solution.
+The source code of the file:
+// src/backend/backend.js
+
+This is beautiful, but we won't use Typescript at all and we will go step by step in commits. It's going top be with 
+some UI debugging about 40 commits job. We also won't use Redux middle-wares to handle HTTP requests. The first thing 
+is to change this file that Firebase is going to be removed completely, but nothing should be broken in the front-end, 
+so we should not get error messages.
+
+Migration is successful, but it's better to put currentUser.isEmailVerified to true, so we can log in. The UI has a 
+bug. It's in the UserAccount component. So the UserAccount.jsx slows down the browser. Here is the code:
+// src/components/UserAccount.jsx
+
+I still cannot log in
+
+Now it's possible to log in. The index should be 0 unless second user exist with the exact same firstname and surname. 
+In that case index counts the users already in the database with the same name and the new user gets this number as 
+index. Now you can change the code.
+
+Now we still have three problems with the UserAccount component.
+    1. The Titlebar component covers the top of the HomePage component. This was no problem in the original version.
+    2. If I register with the same name (both firstname and surname are the same) this registration in not case 
+    sensitive. The name should be the exact same when we introduce the index.
+    3. If the user has index = 1 the profileLink is going to contain the last .1 part a lot of times, 
+    like .1.1.1.1.1.1.1.1.1 and so on. This is very bad and cause a bug.
