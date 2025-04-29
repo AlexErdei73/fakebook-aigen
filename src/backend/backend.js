@@ -1,6 +1,8 @@
 /* =====================================================================
 
+
    Fakebook — back-end file (AUTH + mock social features)
+
 
    ===================================================================== */
 
@@ -38,6 +40,39 @@ const LS_TOKEN = "fakebook.jwt";
 
 const LS_USER_ID = "fakebook.user_id";
 
+/* --------------------------- SESSION (NEW) ----------------------------- */
+
+/*  In-memory copy – null while logged-out  */
+
+let authToken = null;
+
+let authUser = null;
+
+/*  Header helper – import this anywhere you need the bearer token        */
+
+const authHeader = () =>
+  authToken ? { Authorization: `Bearer ${authToken}` } : {};
+
+/*  Initialise / clear session                                            */
+
+function setAuth(token, user_id) {
+  authToken = token;
+
+  authUser = user_id;
+
+  localStorage.setItem(LS_TOKEN, token);
+
+  localStorage.setItem(LS_USER_ID, user_id);
+}
+
+function clearAuth() {
+  authToken = authUser = null;
+
+  localStorage.removeItem(LS_TOKEN);
+
+  localStorage.removeItem(LS_USER_ID);
+}
+
 /* --------------------------- Utilities -------------------------------- */
 
 const genId = () => Math.random().toString(36).slice(2, 11);
@@ -45,8 +80,17 @@ const genId = () => Math.random().toString(36).slice(2, 11);
 const delay = (ms = 200) => new Promise((r) => setTimeout(r, ms));
 
 async function $fetch(url, opts = {}) {
+  /* inject bearer automatically */
+
   const res = await fetch(url, {
-    headers: { "Content-Type": "application/json", ...(opts.headers || {}) },
+    headers: {
+      "Content-Type": "application/json",
+
+      ...authHeader(),
+
+      ...(opts.headers || {}),
+    },
+
     ...opts,
   });
 
@@ -57,9 +101,33 @@ async function $fetch(url, opts = {}) {
   return data;
 }
 
-/* ---------------------- REST → UI mapper (moved up) ------------------ */
+/* ---------------------- REST → UI mapper ------------------------------- */
+
+function addPath(u, fileName) {
+  if (typeof fileName !== "string" || !fileName.length) return fileName;
+
+  if (fileName.includes("/")) return fileName; /* already has folder */
+
+  return `${u.user_id}/${fileName}`; /* prepend owner id   */
+}
 
 function mapRestUser(u) {
+  const photosRaw = JSON.parse(u.photos || "[]");
+
+  const photos = photosRaw.map((item) => {
+    if (typeof item === "string") {
+      /* legacy: array of strings */
+
+      return { filename: addPath(u, item) };
+    }
+
+    if (item && typeof item.filename === "string") {
+      return { ...item, filename: addPath(u, item.filename) };
+    }
+
+    return item;
+  });
+
   return {
     userID: u.user_id,
 
@@ -67,11 +135,13 @@ function mapRestUser(u) {
 
     lastname: u.lastname,
 
+    /* already stored as folder/filename → leave untouched */
+
     profilePictureURL: u.profilePictureURL,
 
     backgroundPictureURL: u.backgroundPictureURL,
 
-    photos: JSON.parse(u.photos || "[]"),
+    photos,
 
     posts: JSON.parse(u.posts || "[]"),
 
@@ -85,7 +155,9 @@ function mapRestUser(u) {
 
 /* ===================================================================== *
    
-      SECTION A — REAL AUTH WORKFLOW (FIXED)                                *
+   
+         SECTION A — REAL AUTH WORKFLOW
+   
    
       ===================================================================== */
 
@@ -100,6 +172,8 @@ export function subscribeAuth() {
     const user_id = localStorage.getItem(LS_USER_ID);
 
     if (!token || !user_id) {
+      clearAuth(); /* make sure RAM copy is empty */
+
       store.dispatch(signOut());
 
       store.dispatch(loadingFinished());
@@ -107,16 +181,16 @@ export function subscribeAuth() {
       return;
     }
 
+    /* restore session into RAM */
+
+    setAuth(token, user_id);
+
     try {
-      /* The users endpoint does NOT understand ?user_id=.
-   
-            Workaround: fetch all users (limit=-1) then find ours. */
+      /* users endpoint lacks ?user_id, so fetch all */
 
-      const users = await $fetch(`${USERS_URL}?limit=-1`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const users = await $fetch(`${USERS_URL}?limit=-1`);
 
-      const u = users.find((u) => u.user_id === user_id);
+      const u = users.find((x) => x.user_id === user_id);
 
       if (!u) throw new Error("User not found");
 
@@ -130,13 +204,9 @@ export function subscribeAuth() {
         })
       );
     } catch (err) {
-      /* Token invalid / expired / user not found */
-
       console.warn("[Auth] subscribeAuth failed:", err.message);
 
-      localStorage.removeItem(LS_TOKEN);
-
-      localStorage.removeItem(LS_USER_ID);
+      clearAuth();
 
       store.dispatch(signOut());
     } finally {
@@ -167,7 +237,7 @@ export async function createUserAccount(user) {
       }),
     });
 
-    store.dispatch(errorOccured("")); // clear previous error
+    store.dispatch(errorOccured(""));
   } catch (err) {
     store.dispatch(errorOccured(err.message));
   } finally {
@@ -175,41 +245,32 @@ export async function createUserAccount(user) {
   }
 }
 
-/* ---------------------- signInUser  (FIXED) -------------------------- */
+/* ---------------------- signInUser  ---------------------------------- */
 
 export async function signInUser(user) {
   store.dispatch(loadingStarted());
 
   try {
-    /* 1.  Login with email + password (as API expects) */
-
     const url = `${LOGIN_URL}?email=${encodeURIComponent(
       user.email
     )}&password=${encodeURIComponent(user.password)}`;
 
     const { token, user_id } = await $fetch(url);
 
-    /* 2.  Persist session */
+    /* persist + put into RAM */
 
-    localStorage.setItem(LS_TOKEN, token);
+    setAuth(token, user_id);
 
-    localStorage.setItem(LS_USER_ID, user_id);
+    /* get full profile */
 
-    /* 3.  Fetch FULL user list, find our profile */
-
-    const users = await $fetch(`${USERS_URL}?limit=-1`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
+    const users = await $fetch(`${USERS_URL}?limit=-1`);
 
     const profile = users.find((u) => u.user_id === user_id);
 
     if (!profile) throw new Error("User not found");
 
-    if (!profile.isEmailVerified) {
+    if (!profile.isEmailVerified)
       throw new Error("Please verify your email before to continue");
-    }
-
-    /* 4.  Dispatch sign-in */
 
     store.dispatch(
       signIn({
@@ -225,9 +286,7 @@ export async function signInUser(user) {
   } catch (err) {
     store.dispatch(errorOccured(err.message));
 
-    localStorage.removeItem(LS_TOKEN);
-
-    localStorage.removeItem(LS_USER_ID);
+    clearAuth();
   } finally {
     store.dispatch(loadingFinished());
   }
@@ -236,13 +295,9 @@ export async function signInUser(user) {
 /* ---------------------- signUserOut ---------------------------------- */
 
 export async function signUserOut() {
-  /* mark offline in DB */
-  await patchOnline(false);
+  await patchOnline(false); /* mark offline */
 
-  /* clear session */
-  localStorage.removeItem(LS_TOKEN);
-
-  localStorage.removeItem(LS_USER_ID);
+  clearAuth();
 
   store.dispatch(signOut());
 }
