@@ -1,0 +1,135 @@
+The schema of the app is in an SQLite database. I give you a screenshot about it. The user authentication is JWT, 
+we will simply save the token in the local storage. Our back-end APIs are available at the following 
+URL: https://alexerdei-team.us.ainiro.io/magic/modules/fakebook/
+This is a REST API. We can get for example all the users like this:
+GET https://alexerdei-team.us.ainiro.io/magic/modules/fakebook/users?limit=-1
+The response is JSON, looks like this:
+[
+{
+"user_id": "67ffe1885cecb6903f8d58fb2617a0f29e93eb18662c2078df305f001cd426ee",
+"email": "mralexerdei@yahoo.co.uk",
+"isEmailVerified": 1,
+"firstname": "Alex",
+"lastname": "Erdei",
+"index": 0,
+"isOnline": 1,
+"password_hash": "$2b$10$VQFOw86QbfwfzOU.LFgXGuklHV0trclmqMpqaM5s9VELZCqvPKEPC",
+"backgroundPictureURL": "67ffe1885cecb6903f8d58fb2617a0f29e93eb18662c2078df305f001cd426ee/MeWithAgnesAndAllan2024.jpeg",
+"profilePictureURL": "67ffe1885cecb6903f8d58fb2617a0f29e93eb18662c2078df305f001cd426ee/alexthedev.jpg",
+"photos": "[{"fileName":"alexthedev.jpg"},{"fileName":"IMG-20240831-WA0000.jpg"},{"fileName":"MeWithAgnesAndAllan2024.jpeg"},{"fileName":"Allan2024.jpeg"},{"fileName":"IMG-20240929-WA0002.jpg"}]",
+"posts": "["mli29juo7z"]"
+},
+{
+"user_id": "4e1b8492aee3a42b3f98f5d56cf8eda88cfafb5d51d4350cd128c84c3d3a2348",
+"email": "alex73@freemail.hu",
+"isEmailVerified": 1,
+"firstname": "Alex",
+"lastname": "Erdei",
+"index": 1,
+"isOnline": 0,
+"password_hash": "$2b$10$p4Jajbb0So39.BzycT7sLe5CEwmd8XoPbNi1MAJT1vSbhqBpRDj3i",
+"backgroundPictureURL": "background-server.jpg",
+"profilePictureURL": "fakebook-avatar.jpeg",
+"photos": "[]",
+"posts": "[]"
+},
+{
+"user_id": "51ac6a0a85117bce58a003662e0c4e3e77a3a24e7f10bdff52f910e662df8bb5",
+"email": "js758089@gmail.com",
+"isEmailVerified": 1,
+"firstname": "Jayesh",
+"lastname": "Sharma",
+"index": 0,
+"isOnline": 0,
+"password_hash": "$2b$10$/IOYr3c9x98Yv0qBemqp.en91Ax9QqkXAWmezkmube/ScPwL0JAGy",
+"backgroundPictureURL": "background-server.jpg",
+"profilePictureURL": "51ac6a0a85117bce58a003662e0c4e3e77a3a24e7f10bdff52f910e662df8bb5/profile.jpg",
+"photos": "[{"fileName":"IMG_20200621_130305.jpg"},{"fileName":"IMG_20200929_114443.jpg"},{"fileName":"profile.jpg"}]",
+"posts": "["hvvz920m38","eyqhy8ah2b"]"
+},
+{
+"user_id": "22b56ab212ed51287f69e309eeb980d103a101344760c91dc4301066c16d23b0",
+"email": "jayesh.sharmait2021@indoreinstitute.com",
+"isEmailVerified": 1,
+"firstname": "Jayesh",
+"lastname": "Sharma",
+"index": 1,
+"isOnline": 0,
+"password_hash": "$2b$10$5a79j3Sa4oKWdgRI1rKwnu4mylWSMsAw90giw03v2i2QBujwTby4m",
+"backgroundPictureURL": "background-server.jpg",
+"profilePictureURL": "fakebook-avatar.jpeg",
+"photos": "[]",
+"posts": "[]"
+}
+]
+The authentication workflow is the following:
+
+    1. The user register a new account with the POST register endpoint.
+    The POST request is sent to the following URL: https://alexerdei-team.us.ainiro.io/magic/modules/fakebook/register
+    It's body in JSON format can be like:
+    {
+    "lastname": "Erdei",
+    "password": "any_user_password_min_12_character",
+    "email": "mralexerdei@yahoo.co.uk",
+    "firstname": "Alex"
+    }
+    2. The user needs to verify his email with clicking to a link, which he receives to his email. Only after this it's possible to login.
+    3. The user logs in to his account by sending
+    GET https://alexerdei-team.us.ainiro.io/magic/modules/fakebook/login?email=mralexerdei%40yahoo.co.uk&password=the-password-of-the-user
+    The successful response:
+    {
+    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1bmlxdWVfbmFtZSI6Im1yYWxleGVyZGVpQHlhaG9vLmNvLnVrIiwicm9sZSI6Imd1ZXN0IiwibmJmIjoxNzQ1OTM1MTM2LCJleHAiOjE3NDU5NzgzMzYsImlhdCI6MTc0NTkzNTEzNn0.M8HuJVOzwlELxZRm89NA9kAagq1tzfMBhIKnRzaYSlM",
+    "user_id": "67ffe1885cecb6903f8d58fb2617a0f29e93eb18662c2078df305f001cd426ee"
+    }
+    If the credentials were wrong, the response would be like this:
+    {
+    "message": "Invalid credentials, access denied"
+    }
+    4. The user can log out. It is simply means that we delete him/her from the local storage.
+    Write me this authentication workflow in the backend.js file. You may need the app.jsx file too.
+    The code is this:
+    // src/app.jsx
+
+Please merge this code together with the current version of backend.js file exactly as I need to copy that in my 
+editor.
+
+The code cannot log in the user. I am getting a Guru meditation ... error from the server, which suggest that the 
+request is not sent in the required format. I check the error in the server. The message: "I don't know how to 
+handle the 'user_id' query parameter " This means that you tried to log in the user with the user_id, but the 
+endpoint needs the email and password as I specified it in my previous prompts. Please fix the code.
+
+Now I am able to sign in, but I do not see the users correctly, when I am signed in. What can be the reason for this?
+
+Now we need to fix it, but currently we can avoid from the posts and the photos of the user. Which files do you need 
+now to do the fix?
+
+Let's focus on the Redux parts for now, because if these are correct, the UI works just fine.
+The usersSclice.js file is:
+// src/features/users/usersSlice.js
+The currentUserSlice.js file:
+// src/features/currentUser/currentUserSlice.js
+You may also need the Firebase format of JSON user data, which the UI handles. That would show you the property 
+names. So here we go:
+// prompts/images/fakebook-firebase-users-schema.png
+
+I still do not see the users in the app correctly with their online status.
+
+What's happening we have got stuck in the loading stage, because of a request error. The REST API uses PUT requests 
+to modify content.
+// prompts/images/commit4-PUTrequest-error-1.png
+
+It's still the same, because the request needs the user_is in the JSON.
+// prompts/images/commit4-PUTrequest-error-2.png
+
+Fix it
+// prompts/images/commit4-PUTrequest-error-2.png
+
+It's still request error. Let's try to add a header about the content type and CORS mode as well.
+// prompts/images/commit4-PUTrequest-error-3.png
+
+Now the function seems to be working. There is only a minor error left. The current user is offline in the UI, even 
+if he has signed in. When he signs out, he needs to go offline in the database.
+
+The PUT request still gives back error. Why?
+
+Content type header was missing.
