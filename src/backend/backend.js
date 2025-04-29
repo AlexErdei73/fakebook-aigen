@@ -1,10 +1,23 @@
-import firebase from "firebase/compat/app";
-import "firebase/compat/storage";
-import "firebase/compat/auth";
-import "firebase/compat/firestore";
-import "firebase/compat/app-check";
-import firebaseConfig from "../firebaseConfig";
+/*  backend.js  –  FIRST MIGRATION STEP
+
+    ------------------------------------
+
+    0.   NO Firebase imports at all.
+
+    1.   Export *exactly* the same function names the UI already uses.
+
+    2.   Provide no-op or mock implementations that fulfil those contracts.
+
+    3.   Tiny in-memory cache (+ localStorage) so screens have something
+
+         to display and don’t blow up on undefined values.
+
+*/
+
+/* Redux store + slices stay exactly as they were */
+
 import store from "../app/store";
+
 import {
   signIn,
   signOut,
@@ -12,260 +25,390 @@ import {
   loadingFinished,
   loadingStarted,
 } from "../features/user/userSlice";
+
 import { currentUserUpdated } from "../features/currentUser/currentUserSlice";
+
 import { usersUpdated } from "../features/users/usersSlice";
+
 import { postsUpdated } from "../features/posts/postsSlice";
+
 import { incomingMessagesUpdated } from "../features/incomingMessages/incomingMessagesSlice";
+
 import { outgoingMessagesUpdated } from "../features/outgoingMessages/outgoingMessagesSlice";
 
-// URL of my website.
-const FAKEBOOK_URL = { url: "https://alexerdei73.github.io/fakebook/" };
+/* ------------------------------------------------------------------ */
 
-firebase.initializeApp(firebaseConfig);
+/*  Small helper utilities                                             */
 
-const appCheck = firebase.appCheck();
-// Pass your reCAPTCHA v3 site key (public key) to activate(). Make sure this
-// key is the counterpart to the secret key you set in the Firebase console.
-appCheck.activate(
-  "6LfCG9UhAAAAAL8vSI4Hbustx8baJEDMA0Sz1zD2",
+/* ------------------------------------------------------------------ */
 
-  // Optional argument. If true, the SDK automatically refreshes App Check
-  // tokens as needed.
-  true
-);
+const genId = () => Math.random().toString(36).slice(2, 11);
 
-const storage = firebase.storage();
+const delay = (ms = 250) => new Promise((r) => setTimeout(r, ms));
 
-export async function getImageURL(imagePath) {
-  const imageRef = storage.ref(imagePath);
-  const url = await imageRef.getDownloadURL();
-  return url;
+/* Persist minimal mock DB so a reload keeps state (optional) */
+
+const LS_KEY = "__fakebook_mock_db__";
+
+const loadDB = () => JSON.parse(localStorage.getItem(LS_KEY) || "{}");
+
+const saveDB = (db) => localStorage.setItem(LS_KEY, JSON.stringify(db));
+
+/* ------------------------------------------------------------------ */
+
+/*  “Database” – lives in memory, persisted to localStorage            */
+
+/* ------------------------------------------------------------------ */
+
+let DB = {
+  currentUser: null, // { id, displayName, isEmailVerified }
+
+  users: [], // array of “profile” objects
+
+  posts: [], // array of posts
+
+  messages: [], // array of { id, sender, recipient, text, isRead, ... }
+
+  ...loadDB(),
+};
+
+/* Convenience finders */
+
+const me = () => DB.users.find((u) => u.userID === DB.currentUser?.id);
+
+const nowISO = () => new Date().toISOString();
+
+/* Anytime we mutate DB we persist */
+
+const commit = () => saveDB(DB);
+
+/* ------------------------------------------------------------------ */
+
+/*  PUBLIC API  (ALL the names the UI already imports)                 */
+
+/* ------------------------------------------------------------------ */
+
+/* ---------- Generic helpers ---------- */
+
+export async function getImageURL(path) {
+  /* Pretend we have a CDN */
+
+  return `/assets/${path}`;
 }
 
-const auth = firebase.auth();
+/* ---------- Auth ---------- */
 
 export function subscribeAuth() {
-  return auth.onAuthStateChanged((user) => {
-    if (user) {
-      const id = user.uid;
-      const isEmailVerified = user.emailVerified;
-      const displayName = user.displayName;
+  /* Mimic Firebase: emit immediately, return an unsubscribe fn */
+
+  setTimeout(() => {
+    if (DB.currentUser) {
+      const { id, displayName, isEmailVerified } = DB.currentUser;
+
       store.dispatch(signIn({ id, displayName, isEmailVerified }));
     } else {
       store.dispatch(signOut());
     }
+
     store.dispatch(loadingFinished());
-  });
-}
+  }, 0);
 
-const firestore = firebase.firestore();
-
-const usersCollection = firestore.collection("users");
-
-//The following global variables get values, when the UserAccount component renders and runs
-//subscribeCurrentUser. After that we use them globally in the following functions.
-let userID;
-let userDocRef;
-
-export function subscribeCurrentUser() {
-  userID = store.getState().user.id; //These are the
-  userDocRef = usersCollection.doc(userID); //global values
-  return userDocRef.onSnapshot((doc) => {
-    store.dispatch(currentUserUpdated(doc.data()));
-  });
-}
-
-export function currentUserOnline() {
-  userDocRef.update({ isOnline: true });
-}
-
-export function currentUserOffline() {
-  return userDocRef.update({ isOnline: false });
-}
-
-export function subscribeUsers() {
-  return usersCollection.onSnapshot((snapshot) => {
-    const users = [];
-    snapshot.forEach((user) => {
-      const userData = user.data();
-      userData.userID = user.id;
-      users.push(userData);
-    });
-    store.dispatch(usersUpdated(users));
-  });
+  return () => {}; // no-op unsubscribe
 }
 
 export async function signUserOut() {
   store.dispatch(loadingStarted());
-  await currentUserOffline();
-  await auth.signOut();
+
+  DB.currentUser = null;
+
+  commit();
+
+  store.dispatch(signOut());
+
   store.dispatch(loadingFinished());
 }
 
-export function subscribePosts() {
-  const postsCollection = firestore.collection("posts");
-  return postsCollection.orderBy("timestamp", "desc").onSnapshot((snapshot) => {
-    const posts = [];
-    snapshot.forEach((post) => {
-      const postData = post.data();
-      const timestamp = postData.timestamp;
-      let dateString = "";
-      if (timestamp) dateString = timestamp.toDate().toLocaleString();
-      postData.timestamp = dateString;
-      postData.postID = post.id;
-      posts.push(postData);
-    });
-    store.dispatch(postsUpdated(posts));
-  });
-}
-
-export function subscribeMessages(typeOfMessages) {
-  let typeOfUser;
-  let actionCreator;
-  if (typeOfMessages === "incoming") {
-    typeOfUser = "recipient";
-    actionCreator = incomingMessagesUpdated;
-  } else {
-    typeOfUser = "sender";
-    actionCreator = outgoingMessagesUpdated;
-  }
-  const messagesCollection = firestore
-    .collection("messages")
-    .where(typeOfUser, "==", userID);
-  return messagesCollection.onSnapshot((snapshot) => {
-    const messages = [];
-    snapshot.forEach((message) => {
-      const messageData = message.data();
-      const timestamp = message.data().timestamp;
-      let dateString;
-      if (timestamp) dateString = timestamp.toDate().toISOString();
-      else dateString = "";
-      messageData.timestamp = dateString;
-      messageData.id = message.id;
-      if (dateString !== "") messages.push(messageData);
-    });
-    store.dispatch(actionCreator(messages));
-  });
-}
+/* createUserAccount mimics registration + e-mail verification mail */
 
 export async function createUserAccount(user) {
   try {
-    const result = await auth.createUserWithEmailAndPassword(
-      user.email,
-      user.password
-    );
-    // Update the nickname
-    await result.user.updateProfile({
+    await delay();
+
+    const uid = genId();
+
+    DB.currentUser = {
+      id: uid,
+
       displayName: `${user.firstname} ${user.lastname}`,
-    });
-    // get the index of the new user with the same username
-    const querySnapshot = await firestore
-      .collection("users")
-      .where("firstname", "==", user.firstname)
-      .where("lastname", "==", user.lastname)
-      .get();
-    const index = querySnapshot.size;
-    // Create firestore document
-    await firestore.collection("users").doc(result.user.uid).set({
+
+      isEmailVerified: true,
+    };
+
+    /* -------------------------------------------------- */
+
+    /* Work out the index:                                */
+
+    /*   – 0 for the first user with this first+last name */
+
+    /*   – N for the N-th user who shares that name       */
+
+    /* -------------------------------------------------- */
+
+    const duplicates = DB.users.filter(
+      (u) => u.firstname === user.firstname && u.lastname === user.lastname
+    ).length;
+
+    DB.users.push({
+      userID: uid,
+
       firstname: user.firstname,
+
       lastname: user.lastname,
+
       profilePictureURL: "fakebook-avatar.jpeg",
+
       backgroundPictureURL: "background-server.jpg",
+
       photos: [],
+
       posts: [],
+
       isOnline: false,
-      index: index,
+
+      isEmailVerified: true,
+
+      index: duplicates, // 0 for first, 1 for second, …
     });
-    // Sign out the user
-    await firebase.auth().signOut();
-    // Send Email Verification and redirect to my website.
-    await result.user.sendEmailVerification(FAKEBOOK_URL);
-    console.log("Verification email has been sent.");
-  } catch (error) {
-    // Update the error
-    store.dispatch(errorOccured(error.message));
-    console.log(error.message);
+
+    commit();
+
+    console.info("[Mock] Registration OK — verification email “sent”.");
+  } catch (err) {
+    store.dispatch(errorOccured(err.message));
   }
 }
 
 export async function signInUser(user) {
-  const EMAIL_VERIFICATION_ERROR =
-    "Please verify your email before to continue";
   const NO_ERROR = "";
-  try {
-    const result = await auth.signInWithEmailAndPassword(
-      user.email,
-      user.password
+
+  const EMAIL_VERIF_ERROR = "Please verify your email before to continue";
+
+  await delay();
+
+  /* Any credentials work in the mock */
+
+  const existing =
+    DB.users.find((u) => u.firstname === user.email.split("@")[0]) ||
+    DB.users[0];
+
+  if (!existing) {
+    store.dispatch(errorOccured("No account found (mock)"));
+  } else if (existing && !existing.isEmailVerified) {
+    DB.currentUser = null;
+
+    store.dispatch(errorOccured(EMAIL_VERIF_ERROR));
+  } else {
+    DB.currentUser = {
+      id: existing.userID,
+
+      displayName: `${existing.firstname} ${existing.lastname}`,
+
+      isEmailVerified: true,
+    };
+
+    /* 👇  NEW: tell Redux that we’re signed in  */
+
+    store.dispatch(
+      signIn({
+        id: DB.currentUser.id,
+
+        displayName: DB.currentUser.displayName,
+
+        isEmailVerified: true,
+      })
     );
-    // email has been verified?
-    if (!result.user.emailVerified) {
-      auth.signOut();
-      store.dispatch(errorOccured(EMAIL_VERIFICATION_ERROR));
-    } else {
-      store.dispatch(errorOccured(NO_ERROR));
-    }
-  } catch (error) {
-    // Update the error
-    store.dispatch(errorOccured(error.message));
-  } finally {
-    store.dispatch(loadingFinished());
+
+    store.dispatch(errorOccured(NO_ERROR));
+
+    commit();
   }
+
+  store.dispatch(loadingFinished());
 }
 
 export function sendPasswordReminder(email) {
-  return auth.sendPasswordResetEmail(email);
+  console.info(`[Mock] password reset email sent to ${email}`);
+
+  return Promise.resolve();
+}
+
+/* ---------- Current user doc ---------- */
+
+export function subscribeCurrentUser() {
+  const uid = store.getState().user.id;
+
+  /* Emit once */
+
+  setTimeout(() => {
+    const doc = DB.users.find((u) => u.userID === uid);
+
+    store.dispatch(currentUserUpdated(doc || {}));
+  }, 0);
+
+  /* Return unsubscribe noop */
+
+  return () => {};
+}
+
+export async function currentUserOnline() {
+  if (me()) {
+    me().isOnline = true;
+    commit();
+  }
+}
+
+export async function currentUserOffline() {
+  if (me()) {
+    me().isOnline = false;
+    commit();
+  }
+}
+
+/* ---------- Users list ---------- */
+
+export function subscribeUsers() {
+  /* Emit immediately */
+
+  setTimeout(() => {
+    store.dispatch(usersUpdated(DB.users.slice()));
+  }, 0);
+
+  return () => {};
+}
+
+/* ---------- Posts ---------- */
+
+export function subscribePosts() {
+  setTimeout(() => {
+    const postsWithStrings = DB.posts.map((p) => ({
+      ...p,
+
+      timestamp: new Date(p.timestamp).toLocaleString(),
+    }));
+
+    store.dispatch(postsUpdated(postsWithStrings));
+  }, 0);
+
+  return () => {};
 }
 
 export async function upload(post) {
-  const refPosts = firestore.collection("posts");
-  const docRef = await refPosts.add({
-    ...post,
-    timestamp: firebase.firestore.FieldValue.serverTimestamp(),
-  });
-  const postID = docRef.id;
-  updateUserPosts(postID);
-  return docRef;
-}
+  await delay();
 
-function updateUserPosts(postID) {
-  const user = store.getState().currentUser;
-  let newPosts;
-  if (user.posts) newPosts = [...user.posts];
-  else newPosts = [];
-  newPosts.unshift(postID);
-  userDocRef.update({
-    posts: newPosts,
-  });
+  const doc = {
+    ...post,
+
+    postID: genId(),
+
+    timestamp: nowISO(),
+  };
+
+  DB.posts.unshift(doc);
+
+  if (me()) {
+    me().posts.unshift(doc.postID);
+  }
+
+  commit();
+
+  return { id: doc.postID }; // mimic Firebase’s docRef id
 }
 
 export function updatePost(post, postID) {
-  const postRef = firestore.collection("posts").doc(postID);
-  //We need to remove the timestamp, because it is stored in serializable format in the redux-store
-  //so we can't write it back to firestore
-  const { timestamp, ...restPost } = post;
-  postRef.update(restPost);
+  const idx = DB.posts.findIndex((p) => p.postID === postID);
+
+  if (idx !== -1) {
+    DB.posts[idx] = { ...DB.posts[idx], ...post };
+
+    commit();
+  }
 }
+
+/* ---------- Storage uploads ---------- */
 
 export function addFileToStorage(file) {
-  const ref = storage.ref(userID).child(file.name);
-  return ref.put(file);
-}
+  console.info("[Mock] file saved:", file.name);
 
-export function updateProfile(profile) {
-  console.log(userDocRef);
-  console.log(profile);
-  return userDocRef.update(profile);
-}
-
-const refMessages = firestore.collection("messages");
-
-export function uploadMessage(msg) {
-  return refMessages.add({
-    ...msg,
-    timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+  return Promise.resolve({
+    ref: { fullPath: `${DB.currentUser?.id}/${file.name}` },
   });
 }
 
-export function updateToBeRead(messageID) {
-  return refMessages.doc(messageID).update({ isRead: true });
+/* ---------- Profile ---------- */
+
+export function updateProfile(profile) {
+  if (me()) {
+    Object.assign(me(), profile);
+
+    commit();
+  }
+
+  return Promise.resolve();
 }
+
+/* ---------- Messages ---------- */
+
+export function subscribeMessages(kind) {
+  const uid = DB.currentUser?.id;
+
+  const isIncoming = kind === "incoming";
+
+  setTimeout(() => {
+    const msgs = DB.messages
+
+      .filter((m) => (isIncoming ? m.recipient === uid : m.sender === uid))
+
+      .map((m) => ({ ...m, timestamp: m.timestamp }));
+
+    store.dispatch(
+      (isIncoming ? incomingMessagesUpdated : outgoingMessagesUpdated)(msgs)
+    );
+  }, 0);
+
+  return () => {};
+}
+
+export function uploadMessage(msg) {
+  DB.messages.push({
+    ...msg,
+
+    id: genId(),
+
+    timestamp: nowISO(),
+
+    isRead: false,
+  });
+
+  commit();
+
+  return Promise.resolve();
+}
+
+export function updateToBeRead(messageID) {
+  const m = DB.messages.find((m) => m.id === messageID);
+
+  if (m) {
+    m.isRead = true;
+    commit();
+  }
+
+  return Promise.resolve();
+}
+
+/* ------ internal helper still referenced by UI code ---------------- */
+
+function updateUserPosts() {
+  /* kept only to satisfy imports; real logic in upload() above */
+}
+
+export { updateUserPosts }; // keep named export so imports don’t break
