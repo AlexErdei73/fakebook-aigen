@@ -1,20 +1,8 @@
-/*  backend.js  –  FIRST MIGRATION STEP
+/* =====================================================================
 
-    ------------------------------------
+   Fakebook — back-end file (AUTH + mock social features)
 
-    0.   NO Firebase imports at all.
-
-    1.   Export *exactly* the same function names the UI already uses.
-
-    2.   Provide no-op or mock implementations that fulfil those contracts.
-
-    3.   Tiny in-memory cache (+ localStorage) so screens have something
-
-         to display and don’t blow up on undefined values.
-
-*/
-
-/* Redux store + slices stay exactly as they were */
+   ===================================================================== */
 
 import store from "../app/store";
 
@@ -22,8 +10,8 @@ import {
   signIn,
   signOut,
   errorOccured,
-  loadingFinished,
   loadingStarted,
+  loadingFinished,
 } from "../features/user/userSlice";
 
 import { currentUserUpdated } from "../features/currentUser/currentUserSlice";
@@ -36,267 +24,400 @@ import { incomingMessagesUpdated } from "../features/incomingMessages/incomingMe
 
 import { outgoingMessagesUpdated } from "../features/outgoingMessages/outgoingMessagesSlice";
 
-/* ------------------------------------------------------------------ */
+/* --------------------------- CONSTANTS -------------------------------- */
 
-/*  Small helper utilities                                             */
+const API_BASE = "https://alexerdei-team.us.ainiro.io/magic/modules/fakebook";
 
-/* ------------------------------------------------------------------ */
+const REGISTER_URL = `${API_BASE}/register`;
+
+const LOGIN_URL = `${API_BASE}/login`;
+
+const USERS_URL = `${API_BASE}/users`;
+
+const LS_TOKEN = "fakebook.jwt";
+
+const LS_USER_ID = "fakebook.user_id";
+
+/* --------------------------- Utilities -------------------------------- */
 
 const genId = () => Math.random().toString(36).slice(2, 11);
 
-const delay = (ms = 250) => new Promise((r) => setTimeout(r, ms));
+const delay = (ms = 200) => new Promise((r) => setTimeout(r, ms));
 
-/* Persist minimal mock DB so a reload keeps state (optional) */
+async function $fetch(url, opts = {}) {
+  const res = await fetch(url, {
+    headers: { "Content-Type": "application/json", ...(opts.headers || {}) },
+    ...opts,
+  });
 
-const LS_KEY = "__fakebook_mock_db__";
+  const data = await res.json();
 
-const loadDB = () => JSON.parse(localStorage.getItem(LS_KEY) || "{}");
+  if (!res.ok) throw new Error(data.message || res.statusText);
 
-const saveDB = (db) => localStorage.setItem(LS_KEY, JSON.stringify(db));
-
-/* ------------------------------------------------------------------ */
-
-/*  “Database” – lives in memory, persisted to localStorage            */
-
-/* ------------------------------------------------------------------ */
-
-let DB = {
-  currentUser: null, // { id, displayName, isEmailVerified }
-
-  users: [], // array of “profile” objects
-
-  posts: [], // array of posts
-
-  messages: [], // array of { id, sender, recipient, text, isRead, ... }
-
-  ...loadDB(),
-};
-
-/* Convenience finders */
-
-const me = () => DB.users.find((u) => u.userID === DB.currentUser?.id);
-
-const nowISO = () => new Date().toISOString();
-
-/* Anytime we mutate DB we persist */
-
-const commit = () => saveDB(DB);
-
-/* ------------------------------------------------------------------ */
-
-/*  PUBLIC API  (ALL the names the UI already imports)                 */
-
-/* ------------------------------------------------------------------ */
-
-/* ---------- Generic helpers ---------- */
-
-export async function getImageURL(path) {
-  /* Pretend we have a CDN */
-
-  return `/assets/${path}`;
+  return data;
 }
 
-/* ---------- Auth ---------- */
+/* ---------------------- REST → UI mapper (moved up) ------------------ */
+
+function mapRestUser(u) {
+  return {
+    userID: u.user_id,
+
+    firstname: u.firstname,
+
+    lastname: u.lastname,
+
+    profilePictureURL: u.profilePictureURL,
+
+    backgroundPictureURL: u.backgroundPictureURL,
+
+    photos: JSON.parse(u.photos || "[]"),
+
+    posts: JSON.parse(u.posts || "[]"),
+
+    isOnline: !!u.isOnline,
+
+    isEmailVerified: !!u.isEmailVerified,
+
+    index: u.index ?? 0,
+  };
+}
+
+/* ===================================================================== *
+   
+      SECTION A — REAL AUTH WORKFLOW (FIXED)                                *
+   
+      ===================================================================== */
+
+/* ---------------------- subscribeAuth -------------------------------- */
 
 export function subscribeAuth() {
-  /* Mimic Firebase: emit immediately, return an unsubscribe fn */
-
-  setTimeout(() => {
-    if (DB.currentUser) {
-      const { id, displayName, isEmailVerified } = DB.currentUser;
-
-      store.dispatch(signIn({ id, displayName, isEmailVerified }));
-    } else {
-      store.dispatch(signOut());
-    }
-
-    store.dispatch(loadingFinished());
-  }, 0);
-
-  return () => {}; // no-op unsubscribe
-}
-
-export async function signUserOut() {
   store.dispatch(loadingStarted());
 
-  DB.currentUser = null;
+  (async () => {
+    const token = localStorage.getItem(LS_TOKEN);
 
-  commit();
+    const user_id = localStorage.getItem(LS_USER_ID);
 
-  store.dispatch(signOut());
+    if (!token || !user_id) {
+      store.dispatch(signOut());
 
-  store.dispatch(loadingFinished());
+      store.dispatch(loadingFinished());
+
+      return;
+    }
+
+    try {
+      /* The users endpoint does NOT understand ?user_id=.
+   
+            Workaround: fetch all users (limit=-1) then find ours. */
+
+      const users = await $fetch(`${USERS_URL}?limit=-1`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      const u = users.find((u) => u.user_id === user_id);
+
+      if (!u) throw new Error("User not found");
+
+      store.dispatch(
+        signIn({
+          id: user_id,
+
+          displayName: `${u.firstname} ${u.lastname}`,
+
+          isEmailVerified: !!u.isEmailVerified,
+        })
+      );
+    } catch (err) {
+      /* Token invalid / expired / user not found */
+
+      console.warn("[Auth] subscribeAuth failed:", err.message);
+
+      localStorage.removeItem(LS_TOKEN);
+
+      localStorage.removeItem(LS_USER_ID);
+
+      store.dispatch(signOut());
+    } finally {
+      store.dispatch(loadingFinished());
+    }
+  })();
+
+  return () => {};
 }
 
-/* createUserAccount mimics registration + e-mail verification mail */
+/* ---------------------- createUserAccount ---------------------------- */
 
 export async function createUserAccount(user) {
+  store.dispatch(loadingStarted());
+
   try {
-    await delay();
+    await $fetch(REGISTER_URL, {
+      method: "POST",
 
-    const uid = genId();
+      body: JSON.stringify({
+        firstname: user.firstname,
 
-    DB.currentUser = {
-      id: uid,
+        lastname: user.lastname,
 
-      displayName: `${user.firstname} ${user.lastname}`,
+        email: user.email,
 
-      isEmailVerified: true,
-    };
-
-    /* -------------------------------------------------- */
-
-    /* Work out the index:                                */
-
-    /*   – 0 for the first user with this first+last name */
-
-    /*   – N for the N-th user who shares that name       */
-
-    /* -------------------------------------------------- */
-
-    const duplicates = DB.users.filter(
-      (u) => u.firstname === user.firstname && u.lastname === user.lastname
-    ).length;
-
-    DB.users.push({
-      userID: uid,
-
-      firstname: user.firstname,
-
-      lastname: user.lastname,
-
-      profilePictureURL: "fakebook-avatar.jpeg",
-
-      backgroundPictureURL: "background-server.jpg",
-
-      photos: [],
-
-      posts: [],
-
-      isOnline: false,
-
-      isEmailVerified: true,
-
-      index: duplicates, // 0 for first, 1 for second, …
+        password: user.password,
+      }),
     });
 
-    commit();
-
-    console.info("[Mock] Registration OK — verification email “sent”.");
+    store.dispatch(errorOccured("")); // clear previous error
   } catch (err) {
     store.dispatch(errorOccured(err.message));
+  } finally {
+    store.dispatch(loadingFinished());
   }
 }
 
+/* ---------------------- signInUser  (FIXED) -------------------------- */
+
 export async function signInUser(user) {
-  const NO_ERROR = "";
+  store.dispatch(loadingStarted());
 
-  const EMAIL_VERIF_ERROR = "Please verify your email before to continue";
+  try {
+    /* 1.  Login with email + password (as API expects) */
 
-  await delay();
+    const url = `${LOGIN_URL}?email=${encodeURIComponent(
+      user.email
+    )}&password=${encodeURIComponent(user.password)}`;
 
-  /* Any credentials work in the mock */
+    const { token, user_id } = await $fetch(url);
 
-  const existing =
-    DB.users.find((u) => u.firstname === user.email.split("@")[0]) ||
-    DB.users[0];
+    /* 2.  Persist session */
 
-  if (!existing) {
-    store.dispatch(errorOccured("No account found (mock)"));
-  } else if (existing && !existing.isEmailVerified) {
-    DB.currentUser = null;
+    localStorage.setItem(LS_TOKEN, token);
 
-    store.dispatch(errorOccured(EMAIL_VERIF_ERROR));
-  } else {
-    DB.currentUser = {
-      id: existing.userID,
+    localStorage.setItem(LS_USER_ID, user_id);
 
-      displayName: `${existing.firstname} ${existing.lastname}`,
+    /* 3.  Fetch FULL user list, find our profile */
 
-      isEmailVerified: true,
-    };
+    const users = await $fetch(`${USERS_URL}?limit=-1`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
 
-    /* 👇  NEW: tell Redux that we’re signed in  */
+    const profile = users.find((u) => u.user_id === user_id);
+
+    if (!profile) throw new Error("User not found");
+
+    if (!profile.isEmailVerified) {
+      throw new Error("Please verify your email before to continue");
+    }
+
+    /* 4.  Dispatch sign-in */
 
     store.dispatch(
       signIn({
-        id: DB.currentUser.id,
+        id: user_id,
 
-        displayName: DB.currentUser.displayName,
+        displayName: `${profile.firstname} ${profile.lastname}`,
 
         isEmailVerified: true,
       })
     );
 
-    store.dispatch(errorOccured(NO_ERROR));
+    store.dispatch(errorOccured(""));
+  } catch (err) {
+    store.dispatch(errorOccured(err.message));
 
-    commit();
+    localStorage.removeItem(LS_TOKEN);
+
+    localStorage.removeItem(LS_USER_ID);
+  } finally {
+    store.dispatch(loadingFinished());
   }
-
-  store.dispatch(loadingFinished());
 }
 
+/* ---------------------- signUserOut ---------------------------------- */
+
+export async function signUserOut() {
+  /* mark offline in DB */
+  await patchOnline(false);
+
+  /* clear session */
+  localStorage.removeItem(LS_TOKEN);
+
+  localStorage.removeItem(LS_USER_ID);
+
+  store.dispatch(signOut());
+}
+
+/* -------------------- sendPasswordReminder --------------------------- */
+
 export function sendPasswordReminder(email) {
-  console.info(`[Mock] password reset email sent to ${email}`);
+  console.info("[TODO] Implement password reminder for", email);
 
   return Promise.resolve();
 }
 
-/* ---------- Current user doc ---------- */
+/* ===================================================================== *
+   
+      SECTION B — IN-MEMORY MOCK (UNCHANGED)                                *
+   
+      ===================================================================== */
+
+/* ------------- tiny DB (persists to localStorage for demo) ----------- */
+
+const LS_DB = "__fakebook_mock_db__";
+
+const DB = Object.assign(
+  {
+    currentUser: null,
+
+    users: [],
+
+    posts: [],
+
+    messages: [],
+  },
+
+  JSON.parse(localStorage.getItem(LS_DB) || "{}")
+);
+
+const persist = () => localStorage.setItem(LS_DB, JSON.stringify(DB));
+
+const me = () => DB.users.find((u) => u.userID === DB.currentUser?.id);
+
+const nowISO = () => new Date().toISOString();
+
+/* --------------------- generic helpers ------------------------------- */
+
+export async function getImageURL(path) {
+  return `/assets/${path}`;
+}
+
+/* ------------------- current user subscriptions ---------------------- */
+
+/* ------------------------------------------------------------------ */
+
+/*  Current user document                                             */
+
+/* ------------------------------------------------------------------ */
 
 export function subscribeCurrentUser() {
-  const uid = store.getState().user.id;
+  let cancelled = false;
 
-  /* Emit once */
+  (async () => {
+    try {
+      const token = localStorage.getItem(LS_TOKEN);
 
-  setTimeout(() => {
-    const doc = DB.users.find((u) => u.userID === uid);
+      const user_id = localStorage.getItem(LS_USER_ID);
 
-    store.dispatch(currentUserUpdated(doc || {}));
-  }, 0);
+      if (!token || !user_id) return;
 
-  /* Return unsubscribe noop */
+      const users = await $fetch(`${USERS_URL}?limit=-1`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
 
-  return () => {};
+      const meRow = users.find((u) => u.user_id === user_id);
+
+      if (meRow && !cancelled) {
+        store.dispatch(currentUserUpdated(mapRestUser(meRow)));
+      }
+    } catch (err) {
+      console.warn("[subscribeCurrentUser] failed:", err.message);
+    }
+  })();
+
+  return () => {
+    cancelled = true;
+  };
 }
+/* ------------------------------------------------------------------ */
 
-export async function currentUserOnline() {
-  if (me()) {
-    me().isOnline = true;
-    commit();
+/*  Online / offline flag                                             */
+
+/* ------------------------------------------------------------------ */
+async function patchOnline(isOnline) {
+  const token = localStorage.getItem(LS_TOKEN);
+
+  const user_id = localStorage.getItem(LS_USER_ID);
+
+  if (!token || !user_id) return;
+
+  try {
+    await $fetch(USERS_URL, {
+      method: "PUT",
+
+      mode: "cors",
+
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+
+      body: JSON.stringify({
+        user_id,
+
+        isOnline: isOnline ? 1 : 0, // DB needs 1/0
+      }),
+    });
+
+    /* -------- optimistic Redux update (merge, not overwrite) -------- */
+
+    const cur = store.getState().currentUser;
+
+    store.dispatch(currentUserUpdated({ ...cur, isOnline })); // boolean
+
+    const usersNew = store
+      .getState()
+      .users.map((u) => (u.userID === user_id ? { ...u, isOnline } : u));
+
+    store.dispatch(usersUpdated(usersNew));
+  } catch (err) {
+    console.warn("[online/offline] PUT failed:", err.message);
   }
 }
 
-export async function currentUserOffline() {
-  if (me()) {
-    me().isOnline = false;
-    commit();
-  }
-}
+export const currentUserOnline = () => patchOnline(true);
 
-/* ---------- Users list ---------- */
+export const currentUserOffline = () => patchOnline(false);
+
+/* ------------------------- users list -------------------------------- */
 
 export function subscribeUsers() {
-  /* Emit immediately */
+  let cancelled = false;
 
-  setTimeout(() => {
-    store.dispatch(usersUpdated(DB.users.slice()));
-  }, 0);
+  (async () => {
+    try {
+      const token = localStorage.getItem(LS_TOKEN);
 
-  return () => {};
+      const users = await $fetch(`${USERS_URL}?limit=-1`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+
+      if (!cancelled) {
+        store.dispatch(usersUpdated(users.map(mapRestUser)));
+      }
+    } catch (err) {
+      console.warn("[subscribeUsers] failed:", err.message);
+    }
+  })();
+
+  /* return unsubscribe fn to keep same contract */
+
+  return () => {
+    cancelled = true;
+  };
 }
 
-/* ---------- Posts ---------- */
+/* ------------------------- posts ------------------------------------- */
 
 export function subscribePosts() {
   setTimeout(() => {
-    const postsWithStrings = DB.posts.map((p) => ({
-      ...p,
-
-      timestamp: new Date(p.timestamp).toLocaleString(),
-    }));
-
-    store.dispatch(postsUpdated(postsWithStrings));
+    store.dispatch(
+      postsUpdated(
+        DB.posts.map((p) => ({
+          ...p,
+          timestamp: new Date(p.timestamp).toLocaleString(),
+        }))
+      )
+    );
   }, 0);
 
   return () => {};
@@ -305,23 +426,15 @@ export function subscribePosts() {
 export async function upload(post) {
   await delay();
 
-  const doc = {
-    ...post,
-
-    postID: genId(),
-
-    timestamp: nowISO(),
-  };
+  const doc = { ...post, postID: genId(), timestamp: nowISO() };
 
   DB.posts.unshift(doc);
 
-  if (me()) {
-    me().posts.unshift(doc.postID);
-  }
+  if (me()) me().posts.unshift(doc.postID);
 
-  commit();
+  persist();
 
-  return { id: doc.postID }; // mimic Firebase’s docRef id
+  return { id: doc.postID };
 }
 
 export function updatePost(post, postID) {
@@ -329,49 +442,42 @@ export function updatePost(post, postID) {
 
   if (idx !== -1) {
     DB.posts[idx] = { ...DB.posts[idx], ...post };
-
-    commit();
+    persist();
   }
 }
 
-/* ---------- Storage uploads ---------- */
+/* ------------------------- storage ----------------------------------- */
 
 export function addFileToStorage(file) {
-  console.info("[Mock] file saved:", file.name);
+  console.info("[Mock] saved file", file.name);
 
   return Promise.resolve({
     ref: { fullPath: `${DB.currentUser?.id}/${file.name}` },
   });
 }
 
-/* ---------- Profile ---------- */
+/* ------------------------- profile ----------------------------------- */
 
 export function updateProfile(profile) {
-  if (me()) {
-    Object.assign(me(), profile);
-
-    commit();
-  }
-
+  if (me()) Object.assign(me(), profile);
+  persist();
   return Promise.resolve();
 }
 
-/* ---------- Messages ---------- */
+/* ------------------------- messages ---------------------------------- */
 
 export function subscribeMessages(kind) {
   const uid = DB.currentUser?.id;
 
-  const isIncoming = kind === "incoming";
+  const inc = kind === "incoming";
 
   setTimeout(() => {
-    const msgs = DB.messages
-
-      .filter((m) => (isIncoming ? m.recipient === uid : m.sender === uid))
-
-      .map((m) => ({ ...m, timestamp: m.timestamp }));
+    const msgs = DB.messages.filter((m) =>
+      inc ? m.recipient === uid : m.sender === uid
+    );
 
     store.dispatch(
-      (isIncoming ? incomingMessagesUpdated : outgoingMessagesUpdated)(msgs)
+      (inc ? incomingMessagesUpdated : outgoingMessagesUpdated)([...msgs])
     );
   }, 0);
 
@@ -379,36 +485,44 @@ export function subscribeMessages(kind) {
 }
 
 export function uploadMessage(msg) {
-  DB.messages.push({
-    ...msg,
-
-    id: genId(),
-
-    timestamp: nowISO(),
-
-    isRead: false,
-  });
-
-  commit();
-
+  DB.messages.push({ ...msg, id: genId(), timestamp: nowISO(), isRead: false });
+  persist();
   return Promise.resolve();
 }
 
-export function updateToBeRead(messageID) {
-  const m = DB.messages.find((m) => m.id === messageID);
-
+export function updateToBeRead(id) {
+  const m = DB.messages.find((m) => m.id === id);
   if (m) {
     m.isRead = true;
-    commit();
+    persist();
   }
-
   return Promise.resolve();
 }
 
-/* ------ internal helper still referenced by UI code ---------------- */
+/* Ensure demo DB has at least one user */
 
-function updateUserPosts() {
-  /* kept only to satisfy imports; real logic in upload() above */
+if (!DB.users.length) {
+  DB.users.push({
+    userID: genId(),
+
+    firstname: "Demo",
+
+    lastname: "User",
+
+    profilePictureURL: "fakebook-avatar.jpeg",
+
+    backgroundPictureURL: "background-server.jpg",
+
+    photos: [],
+
+    posts: [],
+
+    isOnline: 0,
+
+    isEmailVerified: true,
+
+    index: 0,
+  });
+
+  persist();
 }
-
-export { updateUserPosts }; // keep named export so imports don’t break
