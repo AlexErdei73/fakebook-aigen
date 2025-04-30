@@ -1,0 +1,77 @@
+The current form of backend.js file, which works just fine is the 
+following:
+// src/backend/backend.js
+Now we are making the pictures load in. GET image is the request 
+with the same base URL. It takes two query parameters. The first 
+is the folder, which is the user_id of the user, who uploaded the 
+image, the second the filename, which is the original name of the 
+uploaded file. File uploading does a little image optimization. 
+It changes the format to 800px width and keeps aspect ratio. It 
+also changes the file type to png. We need to rewrite the 
+StorageImage.jsx component. It will return an image element where 
+the src attribute is the return value of the GET image request, 
+the alt property an empty string, since images here just 
+decoration. You can remove a kind of caching mechanism, which 
+used Redux too. Let me know, which file can be removed. The 
+current code of the component is:
+// src/components/StorageImage.jsx
+
+We see only placeholder pictures. We need now populate in the 
+usersSlice and the currentUserSlice the photos field too. What 
+do you need to modify for this?
+
+We have got to the loading state, because some function failed. 
+Fix it
+// prompts/images/commit6-GETimage-request-error-1.png
+
+OK, I see the problem now clearly. The photos array stores 
+objects. These have only one field, the filename.
+
+The profilePictureURL and backgroundPictureURL fields contain 
+the folder with the filename
+
+No. We do not need to call addPath for the profilePictureURL and 
+the backgroundPictureURL and we only call it for the element of 
+photos array. It keeps it simpler.
+
+The GET image request has to get the token for authorization too, 
+just like all the requests in this back-end.
+
+What do you think about storing the userID and token in global 
+variables in the backend.js file and deal with the requests only 
+there. So StorageImage could import the function there and no 
+need to always read local storage before every request. Is it 
+better idea?
+
+In this app there is nothing in the local storage, when the user 
+is logged out. So we need ti initialize the variables when the 
+user logs in. This way we can avoid issues. Do it like that.
+
+Give me full bakend.js code please
+
+What's after line 265?
+
+Give me StorageImage.jsx too
+
+I can only see the placeholder images everywhere. What's wrong 
+in the StorageImage code?
+
+No. The requests get the token fine. Every image is a child of 
+the UserAccount component, which only renders if we have a logged 
+in user, so a token. The MIME type header is not right. The 
+request returns a png image from the server. It should not have 
+body part?
+
+My fault, the filenames are webp, because the back-end uses webp 
+format. We need to change the filenames, but to webp. I gave you 
+wrong information.
+
+We can remove the token, because this endpoint is not protected. 
+The folder has to contain the fakebook word, so 
+folder=fakebook/{userID}. I fixed the code, would you like to see 
+it?
+
+I think there is no difference between my version and yours 
+regarding in the url variable. What do you think?
+
+I tried it and it works fine now.
