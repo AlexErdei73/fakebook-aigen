@@ -1,10 +1,12 @@
 /* =====================================================================
 
 
-   Fakebook — back-end file (AUTH + mock social features)
+          Fakebook — back-end file (AUTH + mock social features)
 
 
    ===================================================================== */
+
+import * as signalR from "@microsoft/signalr";
 
 import store from "../app/store";
 
@@ -29,6 +31,8 @@ import { outgoingMessagesUpdated } from "../features/outgoingMessages/outgoingMe
 /* --------------------------- CONSTANTS -------------------------------- */
 
 const API_BASE = "https://alexerdei-team.us.ainiro.io/magic/modules/fakebook";
+
+const SOCKETS_URL = "wss://alexerdei-team.us.ainiro.io/sockets";
 
 const REGISTER_URL = `${API_BASE}/register`;
 
@@ -63,14 +67,8 @@ function setAuth(token, user_id) {
   localStorage.setItem(LS_TOKEN, token);
 
   localStorage.setItem(LS_USER_ID, user_id);
-}
 
-function clearAuth() {
-  authToken = authUser = null;
-
-  localStorage.removeItem(LS_TOKEN);
-
-  localStorage.removeItem(LS_USER_ID);
+  openSocket();
 }
 
 /* --------------------------- Utilities -------------------------------- */
@@ -101,65 +99,13 @@ async function $fetch(url, opts = {}) {
   return data;
 }
 
-/* ---------------------- REST → UI mapper ------------------------------- */
-
-function addPath(u, fileName) {
-  if (typeof fileName !== "string" || !fileName.length) return fileName;
-
-  if (fileName.includes("/")) return fileName; /* already has folder */
-
-  return `${u.user_id}/${fileName}`; /* prepend owner id   */
-}
-
-function mapRestUser(u) {
-  const photosRaw = JSON.parse(u.photos || "[]");
-
-  const photos = photosRaw.map((item) => {
-    if (typeof item === "string") {
-      /* legacy: array of strings */
-
-      return { filename: addPath(u, item) };
-    }
-
-    if (item && typeof item.filename === "string") {
-      return { ...item, filename: addPath(u, item.filename) };
-    }
-
-    return item;
-  });
-
-  return {
-    userID: u.user_id,
-
-    firstname: u.firstname,
-
-    lastname: u.lastname,
-
-    /* already stored as folder/filename → leave untouched */
-
-    profilePictureURL: u.profilePictureURL,
-
-    backgroundPictureURL: u.backgroundPictureURL,
-
-    photos,
-
-    posts: JSON.parse(u.posts || "[]"),
-
-    isOnline: !!u.isOnline,
-
-    isEmailVerified: !!u.isEmailVerified,
-
-    index: u.index ?? 0,
-  };
-}
-
 /* ===================================================================== *
    
    
-         SECTION A — REAL AUTH WORKFLOW
+                    SECTION A — REAL AUTH WORKFLOW
    
    
-      ===================================================================== */
+   ===================================================================== */
 
 /* ---------------------- subscribeAuth -------------------------------- */
 
@@ -310,6 +256,109 @@ export function sendPasswordReminder(email) {
   return Promise.resolve();
 }
 
+/* ------------------------------------------------------------------ */
+
+/*  SignalR hub – one connection shared across the app                */
+
+/* ------------------------------------------------------------------ */
+
+let hub = null;
+
+function openSocket() {
+  if (hub) return; // already connected / connecting
+
+  const token = localStorage.getItem(LS_TOKEN);
+
+  if (!token) return; // not logged-in → no live updates
+
+  hub = new signalR.HubConnectionBuilder()
+
+    .withUrl(SOCKETS_URL, {
+      accessTokenFactory: () => token,
+
+      skipNegotiation: true, // no CORS pre-flight
+
+      transport: signalR.HttpTransportType.WebSockets, // WebSocket only
+    })
+
+    .withAutomaticReconnect()
+
+    .configureLogging(signalR.LogLevel.Warning)
+
+    .build();
+
+  /* ---------------------------------------------------- */
+
+  /* helper – SignalR sends a JSON-string → return POJO   */
+
+  /* ---------------------------------------------------- */
+
+  const parseMsg = (raw) => (typeof raw === "string" ? JSON.parse(raw) : raw);
+
+  /* 1️⃣  Start first … */
+
+  hub
+    .start()
+
+    .then(() => {
+      console.info("[SignalR] connected, id:", hub.connectionId);
+
+      /* 2️⃣  … then register listeners ----------------------------- */
+
+      /* inside openSocket() – unchanged except the helper */
+
+      hub.on("fakebook.users.post", (raw) => {
+        store.dispatch(usersUpdated([parseMsg(raw)]));
+      });
+
+      hub.on("fakebook.users.put", (raw) => {
+        store.dispatch(usersUpdated([parseMsg(raw)]));
+      });
+    })
+
+    .catch((err) => {
+      console.warn("[SignalR] start failed:", err);
+
+      hub = null; // let auto-reconnect retry
+    });
+
+  /* extra diagnostics ---------------------------------------------- */
+
+  hub.onreconnecting((err) => console.warn("[SignalR] reconnecting:", err));
+
+  hub.onreconnected((id) => console.info("[SignalR] reconnected, id:", id));
+
+  hub.onclose((err) => console.warn("[SignalR] closed:", err));
+}
+
+/* ------------------------------------------------------------------ */
+
+/*  Close SignalR + forget credentials                                */
+
+/* ------------------------------------------------------------------ */
+
+function clearAuth() {
+  /* forget in-memory copies */
+
+  authToken = null;
+
+  authUser = null;
+
+  /* forget persisted copies */
+
+  localStorage.removeItem(LS_TOKEN); // "fakebook.jwt"
+
+  localStorage.removeItem(LS_USER_ID); // "fakebook.user_id"
+
+  /* close the hub if it exists */
+
+  if (hub) {
+    hub.stop(); // graceful shutdown → returns a promise we don’t await
+
+    hub = null;
+  }
+}
+
 /* ===================================================================== *
    
       SECTION B — IN-MEMORY MOCK (UNCHANGED)                                *
@@ -372,7 +421,7 @@ export function subscribeCurrentUser() {
       const meRow = users.find((u) => u.user_id === user_id);
 
       if (meRow && !cancelled) {
-        store.dispatch(currentUserUpdated(mapRestUser(meRow)));
+        store.dispatch(currentUserUpdated(meRow));
       }
     } catch (err) {
       console.warn("[subscribeCurrentUser] failed:", err.message);
@@ -447,7 +496,7 @@ export function subscribeUsers() {
       });
 
       if (!cancelled) {
-        store.dispatch(usersUpdated(users.map(mapRestUser)));
+        store.dispatch(usersUpdated(users));
       }
     } catch (err) {
       console.warn("[subscribeUsers] failed:", err.message);
