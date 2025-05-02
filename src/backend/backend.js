@@ -22,7 +22,7 @@ import { currentUserUpdated } from "../features/currentUser/currentUserSlice";
 
 import { usersUpdated } from "../features/users/usersSlice";
 
-import { postsUpdated } from "../features/posts/postsSlice";
+import { postsLoaded, postsUpdated } from "../features/posts/postsSlice";
 
 import { incomingMessagesUpdated } from "../features/incomingMessages/incomingMessagesSlice";
 
@@ -39,6 +39,8 @@ const REGISTER_URL = `${API_BASE}/register`;
 const LOGIN_URL = `${API_BASE}/login`;
 
 const USERS_URL = `${API_BASE}/users`;
+
+const POSTS_URL = `${API_BASE}/posts`;
 
 const LS_TOKEN = "fakebook.jwt";
 
@@ -149,6 +151,16 @@ export function subscribeAuth() {
           isEmailVerified: !!u.isEmailVerified,
         })
       );
+
+      // ------------------------------------------------------------------
+
+      // cold-start: get the full feed once
+
+      // ------------------------------------------------------------------
+
+      subscribePosts(); // <—— fetches /posts and dispatches postsLoaded
+
+      currentUserOnline(); // mark myself online immediately
     } catch (err) {
       console.warn("[Auth] subscribeAuth failed:", err.message);
 
@@ -229,6 +241,8 @@ export async function signInUser(user) {
     );
 
     store.dispatch(errorOccured(""));
+
+    currentUserOnline(); // mark myself online immediately
   } catch (err) {
     store.dispatch(errorOccured(err.message));
 
@@ -314,6 +328,14 @@ function openSocket() {
       hub.on("fakebook.users.put", (raw) => {
         store.dispatch(usersUpdated([parseMsg(raw)]));
       });
+
+      hub.on("fakebook.posts.post", (raw) =>
+        store.dispatch(postsUpdated([JSON.parse(raw)]))
+      );
+
+      hub.on("fakebook.posts.put", (raw) =>
+        store.dispatch(postsUpdated([JSON.parse(raw)]))
+      );
     })
 
     .catch((err) => {
@@ -510,21 +532,36 @@ export function subscribeUsers() {
   };
 }
 
-/* ------------------------- posts ------------------------------------- */
+/* ------------------------------------------------------------------ */
+
+/*  posts subscription: replaces old in-memory mock version           */
+
+/* ------------------------------------------------------------------ */
 
 export function subscribePosts() {
-  setTimeout(() => {
-    store.dispatch(
-      postsUpdated(
-        DB.posts.map((p) => ({
-          ...p,
-          timestamp: new Date(p.timestamp).toLocaleString(),
-        }))
-      )
-    );
-  }, 0);
+  let cancelled = false;
 
-  return () => {};
+  (async () => {
+    try {
+      const token = localStorage.getItem(LS_TOKEN);
+
+      const arr = await $fetch(`${POSTS_URL}?limit=-1`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+
+      if (!cancelled) {
+        store.dispatch(postsLoaded(arr)); // full list once
+      }
+    } catch (err) {
+      console.warn("[subscribePosts] failed:", err.message);
+    }
+  })();
+
+  /* return unsubscribe fn (keeps contract identical) */
+
+  return () => {
+    cancelled = true;
+  };
 }
 
 export async function upload(post) {

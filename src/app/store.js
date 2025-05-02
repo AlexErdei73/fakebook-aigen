@@ -8,7 +8,7 @@ import outgoingMessagesReducer from "../features/outgoingMessages/outgoingMessag
 import linkReducer from "../features/link/linkSlice";
 import accountPageReducer from "../features/accountPage/accountPageSlice";
 
-export default configureStore({
+const store = configureStore({
   reducer: {
     user: userReducer,
     currentUser: currentUserReducer,
@@ -20,3 +20,17 @@ export default configureStore({
     accountPage: accountPageReducer,
   },
 });
+
+if (import.meta.env.DEV) {
+  store.subscribe(() => {
+    const s = store.getState();
+
+    console.log("[DEBUG] users:", s.users);
+
+    console.log("[DEBUG] currentUser:", s.currentUser);
+
+    console.log("[DEBUG] posts:", s.posts);
+  });
+}
+
+export default store;
