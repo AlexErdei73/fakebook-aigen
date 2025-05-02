@@ -1,0 +1,129 @@
+// commit10-firebase-posts-schema.png
+This is a post document in the posts collection in the Firebase 
+Firestore database. The GET posts endpoint in the Magic back-end 
+returns this document:
+[
+{
+"post_id": "mli29juo7z",
+"isPhoto": 0,
+"isYoutube": 1,
+"photoURL": "",
+"youtubeURL": "https://www.youtube.com/embed/FXEDlj-nKNI",
+"text": "This guy is Thomas Hansen, who created AINIRO Magic and the underlying programming language, which is called Hyperlambda. This system is powering the back-end of this app, therefore he is clearly not a fraud:D",
+"comments": "[]",
+"likes": "["67ffe1885cecb6903f8d58fb2617a0f29e93eb18662c2078df305f001cd426ee","22b56ab212ed51287f69e309eeb980d103a101344760c91dc4301066c16d23b0","4e1b8492aee3a42b3f98f5d56cf8eda88cfafb5d51d4350cd128c84c3d3a2348"]",
+"user_id": "67ffe1885cecb6903f8d58fb2617a0f29e93eb18662c2078df305f001cd426ee",
+"timestamp": "2025-03-18 14:18:43"
+},
+{
+"post_id": "eyqhy8ah2b",
+"isPhoto": 0,
+"isYoutube": 0,
+"photoURL": "",
+"youtubeURL": "",
+"text": "Post1",
+"comments": "[]",
+"likes": "["22b56ab212ed51287f69e309eeb980d103a101344760c91dc4301066c16d23b0","51ac6a0a85117bce58a003662e0c4e3e77a3a24e7f10bdff52f910e662df8bb5","67ffe1885cecb6903f8d58fb2617a0f29e93eb18662c2078df305f001cd426ee"]",
+"user_id": "51ac6a0a85117bce58a003662e0c4e3e77a3a24e7f10bdff52f910e662df8bb5",
+"timestamp": "2025-04-09 11:03:04"
+},
+{
+"post_id": "hvvz920m38",
+"isPhoto": 1,
+"isYoutube": 0,
+"photoURL": "51ac6a0a85117bce58a003662e0c4e3e77a3a24e7f10bdff52f910e662df8bb5/IMG_20200929_114443.jpg",
+"youtubeURL": "",
+"text": "My second post",
+"comments": "[]",
+"likes": "["67ffe1885cecb6903f8d58fb2617a0f29e93eb18662c2078df305f001cd426ee","22b56ab212ed51287f69e309eeb980d103a101344760c91dc4301066c16d23b0","51ac6a0a85117bce58a003662e0c4e3e77a3a24e7f10bdff52f910e662df8bb5","4e1b8492aee3a42b3f98f5d56cf8eda88cfafb5d51d4350cd128c84c3d3a2348"]",
+"user_id": "51ac6a0a85117bce58a003662e0c4e3e77a3a24e7f10bdff52f910e662df8bb5",
+"timestamp": "2025-04-09 11:06:39"
+}
+]
+Write the mapping function in the src/utils folder and postsSlice 
+reducer for the app then change the backend.js file to show the 
+posts too.
+
+// commit10-fakebook-app-screenshot.png
+There are two obvious issues on this image, which is the result 
+of running the code with the modifications.
+
+   1. The current user seems to be offline, although it's updated 
+   online in the database.
+   2. I cannot see the posts.
+
+The code do the same as before. The changes were ineffective.
+
+// commit10-console-error.png
+This is the resulting error.
+
+OK, now debugging works
+
+Our previous conversation was about developing a social media 
+application called Fakebook, focusing on several key technical 
+improvements to the backend and frontend. We worked through 
+multiple challenges:
+
+    1.SignalR Integration
+
+    2.Implemented a robust WebSocket connection using SignalR
+    Fixed CORS issues by using direct WebSocket connection
+    Created handlers to manage real-time user updates and posts
+
+    3.Redux State Management
+
+    4.Refactored reducers to handle incremental updates from the 
+    server
+    Created mapping utilities to transform raw server data into 
+    frontend-compatible objects
+    Implemented logic to merge partial updates without losing 
+    existing state information
+
+    5.Authentication and Session Management
+
+    6.Improved token handling and session restoration
+    Created centralized authentication methods in the backend 
+    service
+    Ensured seamless login/logout experiences
+
+    7.Data Synchronization
+
+    8.Developed mechanisms to keep users, current user, and posts 
+    slices synchronized with backend data
+    Implemented real-time updates for online/offline status
+    Created flexible mapping functions to handle various data 
+    formats
+
+    9.Debugging Techniques
+
+    10.Added temporary debug subscribers to track state changes
+    Resolved circular import issues
+    Created strategies to diagnose and fix data loading problems
+
+The conversation demonstrated a systematic approach to solving 
+frontend and backend integration challenges, with a focus on 
+creating a smooth, responsive user experience in a social media 
+application. We iteratively improved the codebase, addressing 
+issues related to data fetching, state management, and real-time 
+updates.
+++++++++++++++++++++++++++++++++++++++++
+
+The isOnline is true and that problem seems to be disappeared. 
+The posts are empty array.
+
+I do not think you put the fetch request, which calls the GET 
+posts endpoint anywhere in the code.
+
+Can I do it with a simple fetch request at the beginning in 
+subscribeAuth function?
+
+We use JavaScript. Is that a problem?
+
+Context is still missing. We have the following two files:
+1. backend.js
+// src/backend/backend.js
+2. postsSlice.js
+// src/features/posts/postsSlice.js
+
+
+
