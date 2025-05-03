@@ -1,0 +1,26 @@
+I have Fakebook, which is a Facebook clone social media app. It has a React-Redux front-end styled by Bootsrtrap 4.3
+and vanilla CSS. The back-end is Firebase. We have the backend.js file, which we work on the most. This connects the
+Firebase back-end to the actual front-end. We will completely rewrite it with certain reducers to switch to a
+completely different back-end solution.
+The source code of the file:
+// src/backend/backend.js
+We need to solve a bug, because we cannot see the photos and posts on the current user's profile. It seems that these 
+fields do not get uploaded, when the UI subscribes for the current user.
+
+I think we have lost context completely. We already have a helper like that, which looks like this:
+// utils/mapRestUser.js
+
+You don't know everything. The conversion goes into the reducers. Those call the mapper functions. We just need to check to functions, because the problem only appears in the current user, not at other users.
+backend.js contains the subscribeCurrentUser function. The Redux slice is called currentUserSlice.js looks like this:
+// src/features/currentUser/currentUserSclice.js
+
+I think the UI calls the subscribeCurrentUser function when it renders the UserAccount component, but we can check it 
+first.
+
+I need all the modifications you suggest.
+
+Can you write proper code blocks?
+
+Can we reuse subscribeAuth in the signInUser function?
+
+Shall we fetch users 2 times if we need to sign in?
