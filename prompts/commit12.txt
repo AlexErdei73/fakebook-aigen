@@ -1,0 +1,50 @@
+The code is fine now, but there are still two problems.
+
+    1. The posts are not in the order of creation. The first we should see the last time posted one. We need to sort 
+    them according to their dates.
+    2. The like and comment buttons are dead on the UI. We need to write the updatePost function in the backend.js 
+    file. This receives the changes in its argument in the Redux format in the post argument and the postID argument 
+    contains the post id. We have to update the post in the server by calling the PUT posts endpoint, but the content 
+    needs to be in the format of the Magic API.
+
+Sorting is not working
+
+The timestamps can be easily converted to date and those can be converted to ISOstring, which can be sorted 
+alphanumerically to get the right order. Let's do it like that. new Date(timestamp) gives back a date.
+
+The UI needs the time step as it is currently. We convert it just for sorting please.
+
+We do not need to worry in the postsUpdated function, because the timestamp never changes. Do we need the localCompate 
+function instead just sort them alphabetically?
+
+It seems nothing changes the order of posts, it's like if it was not getting sorted at all.
+
+The debugging shows the same order all the time
+
+I see post loaded 2 times but the values are always zeros for the comparison.
+
+Every field in the table is undefined apart from timestamp, which is like this 2025-03-18 14:18:43
+
+The posts get sorted now, but not in the right order
+
+I think the problem is that we try to sort inside the reducer and it confuses Redux or Immer. We do not need to sort, 
+because we just need to reverse the order. Instead of push, we need to unshift in the reducer. Do it please
+
+It did the job fine. Now I check the other issue, so the buttons.
+
+The request did not work so I added the Content-type header and I removed the Redux update, because the post request 
+triggers the SignalR update anyway. The sode seems to be working but I get an error message:
+// prompst/images/commit12-console-error.png
+
+Instead of rewriting $fetch I simply removed the headers section from the call. It solved the error warning, but not 
+the red error message.
+
+In the updatePost function those lines need to be removed where something else is updated than the likes or the 
+comments. We do not update anything else and the text field triggers an error in Magic.
+
+You wrote the $fetch function. You know why? You can save on adding the same headers all the time.
+
+If that's the whole reason, why do you always add the headers in your code even when you call $fetch?
+
+I removed the optimist Redux update in the patchOnline function. It does not matter, because the SignalR connection 
+updates the online status in the Redux store.
