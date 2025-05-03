@@ -329,13 +329,13 @@ function openSocket() {
         store.dispatch(usersUpdated([parseMsg(raw)]));
       });
 
-      hub.on("fakebook.posts.post", (raw) =>
-        store.dispatch(postsUpdated([JSON.parse(raw)]))
-      );
+      hub.on("fakebook.posts.post", (raw) => {
+        store.dispatch(postsUpdated([JSON.parse(raw)]));
+      });
 
-      hub.on("fakebook.posts.put", (raw) =>
-        store.dispatch(postsUpdated([JSON.parse(raw)]))
-      );
+      hub.on("fakebook.posts.put", (raw) => {
+        store.dispatch(postsUpdated([JSON.parse(raw)]));
+      });
     })
 
     .catch((err) => {
@@ -470,31 +470,12 @@ async function patchOnline(isOnline) {
     await $fetch(USERS_URL, {
       method: "PUT",
 
-      mode: "cors",
-
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-
       body: JSON.stringify({
         user_id,
 
         isOnline: isOnline ? 1 : 0, // DB needs 1/0
       }),
     });
-
-    /* -------- optimistic Redux update (merge, not overwrite) -------- */
-
-    const cur = store.getState().currentUser;
-
-    store.dispatch(currentUserUpdated({ ...cur, isOnline })); // boolean
-
-    const usersNew = store
-      .getState()
-      .users.map((u) => (u.userID === user_id ? { ...u, isOnline } : u));
-
-    store.dispatch(usersUpdated(usersNew));
   } catch (err) {
     console.warn("[online/offline] PUT failed:", err.message);
   }
@@ -578,13 +559,41 @@ export async function upload(post) {
   return { id: doc.postID };
 }
 
-export function updatePost(post, postID) {
-  const idx = DB.posts.findIndex((p) => p.postID === postID);
+/* --------------------------------------------------------------
 
-  if (idx !== -1) {
-    DB.posts[idx] = { ...DB.posts[idx], ...post };
-    persist();
-  }
+    Update a post (likes, comments, text, etc.)
+
+    post   → partial object in Redux/UI format
+
+    postID → numeric/string id in the REST DB
+
+   -------------------------------------------------------------- */
+
+export async function updatePost(post, postID) {
+  const token = localStorage.getItem(LS_TOKEN);
+
+  if (!token) throw new Error("Not authenticated");
+
+  /* 1. Map Redux-shape → Magic API shape ----------------------- */
+
+  const body = { post_id: postID }; // mandatory key
+
+  if (post.comments !== undefined)
+    body.comments = JSON.stringify(post.comments);
+
+  if (post.likes !== undefined) body.likes = JSON.stringify(post.likes);
+
+  /* 2. Fire PUT /posts ---------------------------------------- */
+
+  await $fetch(POSTS_URL, {
+    method: "PUT",
+
+    body: JSON.stringify(body),
+  });
+
+  /* 3. Refresh Redux state (merge) ---------------------------- */
+
+  //store.dispatch(postsUpdated([updatedRow]));
 }
 
 /* ------------------------- storage ----------------------------------- */
