@@ -109,7 +109,55 @@ async function $fetch(url, opts = {}) {
    
    ===================================================================== */
 
-/* ---------------------- subscribeAuth -------------------------------- */
+/* =========================================================================
+
+   BOOTSTRAP SESSION  –  used by subscribeAuth()  *and*  signInUser()
+
+   ====================================================================== */
+
+/**
+
+ * Fetches all users, finds the logged-in user, updates Redux,
+
+ * cold-starts the post feed, and marks the user online.
+
+ *
+
+ * Throws if the user row cannot be found.
+
+ */
+
+async function bootstrapSession(user_id) {
+  // 1. fetch all users (Magic API has no `/users/:id`)
+
+  const users = await $fetch(`${USERS_URL}?limit=-1`);
+
+  const meRow = users.find((u) => u.user_id === user_id);
+
+  if (!meRow) throw new Error("User not found");
+
+  // 2. update the auth slice (for navbar, etc.)
+
+  store.dispatch(
+    signIn({
+      id: user_id,
+
+      displayName: `${meRow.firstname} ${meRow.lastname}`,
+
+      isEmailVerified: !!meRow.isEmailVerified,
+    })
+  );
+
+  // 3. populate currentUser slice (fixes “missing photos / posts”)
+
+  store.dispatch(currentUserUpdated(meRow));
+
+  // 4. cold-start posts feed and mark myself online
+
+  subscribePosts();
+
+  currentUserOnline();
+}
 
 export function subscribeAuth() {
   store.dispatch(loadingStarted());
@@ -120,7 +168,7 @@ export function subscribeAuth() {
     const user_id = localStorage.getItem(LS_USER_ID);
 
     if (!token || !user_id) {
-      clearAuth(); /* make sure RAM copy is empty */
+      clearAuth();
 
       store.dispatch(signOut());
 
@@ -129,38 +177,10 @@ export function subscribeAuth() {
       return;
     }
 
-    /* restore session into RAM */
-
     setAuth(token, user_id);
 
     try {
-      /* users endpoint lacks ?user_id, so fetch all */
-
-      const users = await $fetch(`${USERS_URL}?limit=-1`);
-
-      const u = users.find((x) => x.user_id === user_id);
-
-      if (!u) throw new Error("User not found");
-
-      store.dispatch(
-        signIn({
-          id: user_id,
-
-          displayName: `${u.firstname} ${u.lastname}`,
-
-          isEmailVerified: !!u.isEmailVerified,
-        })
-      );
-
-      // ------------------------------------------------------------------
-
-      // cold-start: get the full feed once
-
-      // ------------------------------------------------------------------
-
-      subscribePosts(); // <—— fetches /posts and dispatches postsLoaded
-
-      currentUserOnline(); // mark myself online immediately
+      await bootstrapSession(user_id); // <── single shared call
     } catch (err) {
       console.warn("[Auth] subscribeAuth failed:", err.message);
 
@@ -174,7 +194,6 @@ export function subscribeAuth() {
 
   return () => {};
 }
-
 /* ---------------------- createUserAccount ---------------------------- */
 
 export async function createUserAccount(user) {
@@ -203,46 +222,27 @@ export async function createUserAccount(user) {
   }
 }
 
-/* ---------------------- signInUser  ---------------------------------- */
-
 export async function signInUser(user) {
   store.dispatch(loadingStarted());
 
   try {
+    // 1. login
+
     const url = `${LOGIN_URL}?email=${encodeURIComponent(
       user.email
     )}&password=${encodeURIComponent(user.password)}`;
 
     const { token, user_id } = await $fetch(url);
 
-    /* persist + put into RAM */
+    // 2. persist token + open socket
 
     setAuth(token, user_id);
 
-    /* get full profile */
+    // 3. reuse the exact same bootstrap logic
 
-    const users = await $fetch(`${USERS_URL}?limit=-1`);
+    await bootstrapSession(user_id);
 
-    const profile = users.find((u) => u.user_id === user_id);
-
-    if (!profile) throw new Error("User not found");
-
-    if (!profile.isEmailVerified)
-      throw new Error("Please verify your email before to continue");
-
-    store.dispatch(
-      signIn({
-        id: user_id,
-
-        displayName: `${profile.firstname} ${profile.lastname}`,
-
-        isEmailVerified: true,
-      })
-    );
-
-    store.dispatch(errorOccured(""));
-
-    currentUserOnline(); // mark myself online immediately
+    store.dispatch(errorOccured("")); // clear possible old errors
   } catch (err) {
     store.dispatch(errorOccured(err.message));
 
@@ -590,28 +590,111 @@ export async function updatePost(post, postID) {
 
     body: JSON.stringify(body),
   });
-
-  /* 3. Refresh Redux state (merge) ---------------------------- */
-
-  //store.dispatch(postsUpdated([updatedRow]));
 }
 
-/* ------------------------- storage ----------------------------------- */
+/* =====================================================================
 
-export function addFileToStorage(file) {
-  console.info("[Mock] saved file", file.name);
+   PHOTO / PROFILE HELPERS
 
-  return Promise.resolve({
-    ref: { fullPath: `${DB.currentUser?.id}/${file.name}` },
+   ===================================================================== */
+
+const IMAGE_UPLOAD_URL = `${API_BASE}/image`; // POST image
+
+/* --------------------------------------------------------------
+   
+      addFileToStorage
+   
+      -------------------------------------------------------------- */
+
+/*  file → native File object coming from <input type="file">         */
+
+/*  RETURNS: { url, path, ... } exactly what the Magic endpoint sends */
+
+export async function addFileToStorage(file) {
+  if (!file) throw new Error("No file given");
+
+  const fd = new FormData();
+
+  fd.append("file", file, file.name);
+
+  const res = await fetch(IMAGE_UPLOAD_URL, {
+    method: "POST",
+
+    headers: {
+      ...authHeader(), // adds Authorization if we’re logged in
+
+      // DO NOT set Content-Type – the browser will add multipart boundary
+    },
+
+    body: fd,
   });
+
+  if (!res.ok) {
+    const msg = await res.text();
+
+    throw new Error(`Image upload failed: ${msg || res.statusText}`);
+  }
+
+  /* Magic returns JSON with at least { url } (and sometimes path, size…) */
+
+  const data = await res.json();
+
+  return data; // UploadPhoto.jsx ignores, updateDatabase uses
 }
 
-/* ------------------------- profile ----------------------------------- */
+/* --------------------------------------------------------------
 
-export function updateProfile(profile) {
-  if (me()) Object.assign(me(), profile);
-  persist();
-  return Promise.resolve();
+   updateProfile
+
+   -------------------------------------------------------------- */
+
+/*  patch → only the fields that changed, e.g.                     */
+
+/*          { profilePictureURL: "...jpg" }                        */
+
+/*          { photos: ["p1.jpg", "p2.jpg"] }                       */
+
+/*  Updates DB and refreshes Redux                                 */
+
+export async function updateProfile(patch) {
+  const token = localStorage.getItem(LS_TOKEN);
+
+  const user_id = localStorage.getItem(LS_USER_ID);
+
+  if (!token || !user_id) throw new Error("Not authenticated");
+
+  /* Shape request body exactly like the Magic API expects -------- */
+
+  const body = { user_id };
+
+  if (patch.profilePictureURL !== undefined)
+    body.profilePictureURL = patch.profilePictureURL;
+
+  if (patch.backgroundPictureURL !== undefined)
+    body.backgroundPictureURL = patch.backgroundPictureURL;
+
+  if (patch.photos !== undefined)
+    // array → JSON string
+
+    body.photos = JSON.stringify(patch.photos);
+
+  /* Fire PUT /users --------------------------------------------- */
+
+  const updatedRow = await $fetch(USERS_URL, {
+    method: "PUT",
+
+    body: JSON.stringify(body),
+  }); // $fetch auto-adds headers
+
+  /* Update Redux immediately for smooth UX ---------------------- */
+
+  store.dispatch(currentUserUpdated(updatedRow));
+
+  store.dispatch(usersUpdated([updatedRow]));
+
+  /* When the hub later sends fakebook.users.put the same row will
+
+     merge in again; that’s harmless. */
 }
 
 /* ------------------------- messages ---------------------------------- */
