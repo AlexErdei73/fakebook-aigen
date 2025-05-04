@@ -1,0 +1,13 @@
+There is still another bug. We do not see the online status of the current user in the TitleBar when we sign in. This 
+bug does not show, when we are already signed in and refresh the browser.
+
+I need the full modification
+
+I think we just need to call the update the online status of the current user in Redux at the sign in function, which 
+should not be more than a line modification. What do you think?
+
+The code is working but not perfect. I am online first for a split second then I am going back offline and stay like 
+that. I see PUT request 3 times, at first it puts me offline then online 2x. The problem is that the currentUser do 
+not follow this, because the currentUserSlice is not getting updated by SignalR.
+
+The problem is solved, but enough to change the fakebook.users.put listener, because me won't get generated again.
