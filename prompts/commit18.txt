@@ -1,0 +1,23 @@
+The next task to make me able to create a new post and it should be written to the server.
+
+Let me refresh your memory. The UI will send the post in the Firebase format, which is visible in the following 
+screenshot. I will also show you the Magic table for the posts, just to make the conversion more accurate.
+// prompts/images/commit18-firebase-posts-schema.png
+// prompts/images/commit18-magic-fakebook-schema.png
+
+We should rely only on the SignalR update. We need to change the reducer for that tiny bit, because the post, what 
+Magic sends back contains a timestamp, which is exactly "Invalid Date". Later when we fetch the posts the correct 
+time stamp is going to be there. Can you update the reducer for this case too?
+
+The postsLoaded reducer used some code in the utils folder to map the Magic format to the Firebase format. We should 
+not ignore that. We also only need to modify brand new posts in the postsUpdated reducer regarding the timestamp.
+
+This should be almost working, but let's not forget, that everything is coming from Magic, so we should instead just 
+rewrite the code a bit. The old reducer is:
+// src/features/posts/postsSlice.js
+
+The following error occurred when I tried to make my new post:
+// prompts/images/commit18-console-error.png
+// prompts/images/commit18-magic-error.png
+
+Could you use the local variables instead of local storage too?
