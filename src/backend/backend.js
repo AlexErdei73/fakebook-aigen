@@ -552,19 +552,58 @@ export function subscribePosts() {
     cancelled = true;
   };
 }
+/* ------------------------------------------------------------------ */
+
+/*  CREATE A NEW POST – uses in-memory auth + sends post_id           */
+
+/* ------------------------------------------------------------------ */
 
 export async function upload(post) {
-  await delay();
+  /* fast path: in-memory → fall back to localStorage once */
 
-  const doc = { ...post, postID: genId(), timestamp: nowISO() };
+  const token = authToken || localStorage.getItem(LS_TOKEN);
 
-  DB.posts.unshift(doc);
+  const user_id = authUser || localStorage.getItem(LS_USER_ID);
 
-  if (me()) me().posts.unshift(doc.postID);
+  if (!token || !user_id) throw new Error("Not authenticated");
 
-  persist();
+  /* Magic table requires the primary key up front */
 
-  return { id: doc.postID };
+  const post_id = genId(); // already in backend.js
+
+  const body = {
+    post_id, // ← fixes NOT NULL error
+
+    user_id,
+
+    text: post.text ?? "",
+
+    photoURL: post.photoURL ?? "",
+
+    youtubeURL: post.youtubeURL ?? "",
+
+    isPhoto: post.isPhoto ? 1 : 0, // Magic expects 1/0
+
+    isYoutube: post.isYoutube ? 1 : 0,
+
+    likes: JSON.stringify(post.likes ?? []),
+
+    comments: JSON.stringify(post.comments ?? []),
+
+    timestamp: new Date().toISOString(), // optional but useful
+  };
+
+  /* POST /posts – let SignalR broadcast the newly created row */
+
+  await $fetch(POSTS_URL, {
+    method: "POST",
+
+    body: JSON.stringify(body),
+  }); // $fetch adds Authorization
+
+  /* keep old contract: caller expects { id } */
+
+  return { id: post_id };
 }
 
 /* --------------------------------------------------------------

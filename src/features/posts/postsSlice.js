@@ -2,59 +2,65 @@ import { createSlice } from "@reduxjs/toolkit";
 
 import mapRestPost from "../../utils/mapRestPost";
 
+/* --------------------------------------------------------------
+
+   helper – fixes the Magic placeholder only once, on INSERT
+
+   -------------------------------------------------------------- */
+
+const withValidTimestamp = (post) =>
+  post.timestamp === "Invalid Date" || !post.timestamp
+    ? { ...post, timestamp: new Date().toISOString() }
+    : post;
+
 export const postsSlice = createSlice({
-	name: "posts",
+  name: "posts",
 
-	initialState: [],
+  initialState: [],
 
-	reducers: {
-		/* full reload (initial screen) --------------------------------- */
+  reducers: {
+    /* full reload: oldest → newest, so reverse once */
 
-		postsLoaded: (_state, action) =>
-			// API returns oldest → newest, so reverse once
+    postsLoaded: (_state, action) => action.payload.map(mapRestPost).reverse(),
 
-			action.payload.map(mapRestPost).reverse(),
+    /* incremental updates from Signal R */
 
-		/* incremental updates: insert new or patch existing ------------ */
+    postsUpdated: (state, action) => {
+      action.payload.forEach((raw) => {
+        const postID = raw.post_id ?? raw.postID;
 
-		postsUpdated: (state, action) => {
-			const incoming = action.payload; // array of raw rows
+        const idx = state.findIndex((p) => p.postID === postID);
 
-			incoming.forEach((raw) => {
-				const postID = raw.post_id ?? raw.postID;
+        /* -------- INSERT NEW ------------------------------------------------ */
 
-				const idx = state.findIndex((p) => p.postID === postID);
+        if (idx === -1) {
+          state.unshift(withValidTimestamp(mapRestPost(raw))); // newest first
 
-				if (idx === -1) {
-					/* NEW  →  put at the front so list stays newest-first */
+          return;
+        }
 
-					state.unshift(mapRestPost(raw));
+        /* -------- MERGE PARTIAL UPDATE ------------------------------------- */
 
-					return;
-				}
+        const cur = state[idx];
 
-				/* MERGE PARTIAL UPDATE (order unchanged) ------------------ */
+        if (raw.text !== undefined) cur.text = raw.text;
 
-				const cur = state[idx];
+        if (raw.photoURL !== undefined) cur.photoURL = raw.photoURL;
 
-				if (raw.text !== undefined) cur.text = raw.text;
+        if (raw.youtubeURL !== undefined) cur.youtubeURL = raw.youtubeURL;
 
-				if (raw.photoURL !== undefined) cur.photoURL = raw.photoURL;
+        if (raw.isPhoto !== undefined) cur.isPhoto = !!raw.isPhoto;
 
-				if (raw.youtubeURL !== undefined) cur.youtubeURL = raw.youtubeURL;
+        if (raw.isYoutube !== undefined) cur.isYoutube = !!raw.isYoutube;
 
-				if (raw.isPhoto !== undefined) cur.isPhoto = !!raw.isPhoto;
+        if (raw.comments !== undefined) cur.comments = JSON.parse(raw.comments);
 
-				if (raw.isYoutube !== undefined) cur.isYoutube = !!raw.isYoutube;
+        if (raw.likes !== undefined) cur.likes = JSON.parse(raw.likes);
 
-				if (raw.comments !== undefined) cur.comments = JSON.parse(raw.comments);
-
-				if (raw.likes !== undefined) cur.likes = JSON.parse(raw.likes);
-
-				/* raw.timestamp never changes, so we leave it untouched */
-			});
-		},
-	},
+        /* raw.timestamp never changes in an update → leave untouched */
+      });
+    },
+  },
 });
 
 export const { postsLoaded, postsUpdated } = postsSlice.actions;
