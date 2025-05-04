@@ -309,6 +309,10 @@ function openSocket() {
 
   const parseMsg = (raw) => (typeof raw === "string" ? JSON.parse(raw) : raw);
 
+  /* helper – does the row belong to me? */
+
+  const isMe = (row) => row && row.user_id === localStorage.getItem(LS_USER_ID);
+
   /* 1️⃣  Start first … */
 
   hub
@@ -326,7 +330,11 @@ function openSocket() {
       });
 
       hub.on("fakebook.users.put", (raw) => {
-        store.dispatch(usersUpdated([parseMsg(raw)]));
+        const row = parseMsg(raw);
+
+        store.dispatch(usersUpdated([row]));
+
+        if (isMe(row)) store.dispatch(currentUserUpdated(row));
       });
 
       hub.on("fakebook.posts.post", (raw) => {
