@@ -1,0 +1,4 @@
+There is another bug for users, whose index > 0. The MiniPhotos component takes the user to the photos page of the 
+user with index = 0.
+Here is the code of the component, fix it.
+// src/components/MiniPhotos.jsx
