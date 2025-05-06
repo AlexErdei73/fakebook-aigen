@@ -601,6 +601,35 @@ export async function upload(post) {
     body: JSON.stringify(body),
   }); // $fetch adds Authorization
 
+  /* --------------------------------------------------------------
+
+    2️⃣  Update my users.posts array (DB + Redux)
+
+     -------------------------------------------------------------- */
+
+  try {
+    const state = store.getState();
+
+    const me = state.currentUser; // already normalised
+
+    const currentPosts = me?.posts ?? [];
+
+    const updatedPosts = [...currentPosts, post_id];
+
+    /* 2a. Persist to the server ---------------------------------- */
+
+    await $fetch(USERS_URL, {
+      method: "PUT",
+
+      body: JSON.stringify({
+        user_id,
+
+        posts: JSON.stringify(updatedPosts),
+      }),
+    });
+  } catch (err) {
+    console.warn("[upload] failed to patch users.posts:", err.message);
+  }
   /* keep old contract: caller expects { id } */
 
   return { id: post_id };
