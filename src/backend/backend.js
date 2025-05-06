@@ -11,11 +11,11 @@ import * as signalR from "@microsoft/signalr";
 import store from "../app/store";
 
 import {
-  signIn,
-  signOut,
-  errorOccured,
-  loadingStarted,
-  loadingFinished,
+	signIn,
+	signOut,
+	errorOccured,
+	loadingStarted,
+	loadingFinished,
 } from "../features/user/userSlice";
 
 import { currentUserUpdated } from "../features/currentUser/currentUserSlice";
@@ -27,6 +27,8 @@ import { postsLoaded, postsUpdated } from "../features/posts/postsSlice";
 import { incomingMessagesUpdated } from "../features/incomingMessages/incomingMessagesSlice";
 
 import { outgoingMessagesUpdated } from "../features/outgoingMessages/outgoingMessagesSlice";
+
+import { mapRestMessage } from "../utils/mapRestMessage";
 
 /* --------------------------- CONSTANTS -------------------------------- */
 
@@ -57,20 +59,20 @@ let authUser = null;
 /*  Header helper – import this anywhere you need the bearer token        */
 
 const authHeader = () =>
-  authToken ? { Authorization: `Bearer ${authToken}` } : {};
+	authToken ? { Authorization: `Bearer ${authToken}` } : {};
 
 /*  Initialise / clear session                                            */
 
 function setAuth(token, user_id) {
-  authToken = token;
+	authToken = token;
 
-  authUser = user_id;
+	authUser = user_id;
 
-  localStorage.setItem(LS_TOKEN, token);
+	localStorage.setItem(LS_TOKEN, token);
 
-  localStorage.setItem(LS_USER_ID, user_id);
+	localStorage.setItem(LS_USER_ID, user_id);
 
-  openSocket();
+	openSocket();
 }
 
 /* --------------------------- Utilities -------------------------------- */
@@ -80,25 +82,25 @@ const genId = () => Math.random().toString(36).slice(2, 11);
 const delay = (ms = 200) => new Promise((r) => setTimeout(r, ms));
 
 async function $fetch(url, opts = {}) {
-  /* inject bearer automatically */
+	/* inject bearer automatically */
 
-  const res = await fetch(url, {
-    headers: {
-      "Content-Type": "application/json",
+	const res = await fetch(url, {
+		headers: {
+			"Content-Type": "application/json",
 
-      ...authHeader(),
+			...authHeader(),
 
-      ...(opts.headers || {}),
-    },
+			...(opts.headers || {}),
+		},
 
-    ...opts,
-  });
+		...opts,
+	});
 
-  const data = await res.json();
+	const data = await res.json();
 
-  if (!res.ok) throw new Error(data.message || res.statusText);
+	if (!res.ok) throw new Error(data.message || res.statusText);
 
-  return data;
+	return data;
 }
 
 /* ===================================================================== *
@@ -128,146 +130,152 @@ async function $fetch(url, opts = {}) {
  */
 
 async function bootstrapSession(user_id) {
-  // 1. fetch all users (Magic API has no `/users/:id`)
+	// 1. fetch all users (Magic API has no `/users/:id`)
 
-  const users = await $fetch(`${USERS_URL}?limit=-1`);
+	const users = await $fetch(`${USERS_URL}?limit=-1`);
 
-  const meRow = users.find((u) => u.user_id === user_id);
+	const meRow = users.find((u) => u.user_id === user_id);
 
-  if (!meRow) throw new Error("User not found");
+	if (!meRow) throw new Error("User not found");
 
-  // 2. update the auth slice (for navbar, etc.)
+	// 2. update the auth slice (for navbar, etc.)
 
-  store.dispatch(
-    signIn({
-      id: user_id,
+	store.dispatch(
+		signIn({
+			id: user_id,
 
-      displayName: `${meRow.firstname} ${meRow.lastname}`,
+			displayName: `${meRow.firstname} ${meRow.lastname}`,
 
-      isEmailVerified: !!meRow.isEmailVerified,
-    })
-  );
+			isEmailVerified: !!meRow.isEmailVerified,
+		})
+	);
 
-  // 3. populate currentUser slice (fixes “missing photos / posts”)
+	// 3. populate currentUser slice (fixes “missing photos / posts”)
 
-  store.dispatch(currentUserUpdated(meRow));
+	store.dispatch(currentUserUpdated(meRow));
 
-  // 4. cold-start posts feed and mark myself online
+	// 4. cold-start posts feed and mark myself online
 
-  subscribePosts();
+	subscribePosts();
 
-  currentUserOnline();
+	currentUserOnline();
+
+	/* inside bootstrapSession(), after openSocket() + currentUserOnline() */
+
+	subscribeMessages("incoming");
+
+	subscribeMessages("outgoing");
 }
 
 export function subscribeAuth() {
-  store.dispatch(loadingStarted());
+	store.dispatch(loadingStarted());
 
-  (async () => {
-    const token = localStorage.getItem(LS_TOKEN);
+	(async () => {
+		const token = localStorage.getItem(LS_TOKEN);
 
-    const user_id = localStorage.getItem(LS_USER_ID);
+		const user_id = localStorage.getItem(LS_USER_ID);
 
-    if (!token || !user_id) {
-      clearAuth();
+		if (!token || !user_id) {
+			clearAuth();
 
-      store.dispatch(signOut());
+			store.dispatch(signOut());
 
-      store.dispatch(loadingFinished());
+			store.dispatch(loadingFinished());
 
-      return;
-    }
+			return;
+		}
 
-    setAuth(token, user_id);
+		setAuth(token, user_id);
 
-    try {
-      await bootstrapSession(user_id); // <── single shared call
-    } catch (err) {
-      console.warn("[Auth] subscribeAuth failed:", err.message);
+		try {
+			await bootstrapSession(user_id); // <── single shared call
+		} catch (err) {
+			console.warn("[Auth] subscribeAuth failed:", err.message);
 
-      clearAuth();
+			clearAuth();
 
-      store.dispatch(signOut());
-    } finally {
-      store.dispatch(loadingFinished());
-    }
-  })();
+			store.dispatch(signOut());
+		} finally {
+			store.dispatch(loadingFinished());
+		}
+	})();
 
-  return () => {};
+	return () => {};
 }
 /* ---------------------- createUserAccount ---------------------------- */
 
 export async function createUserAccount(user) {
-  store.dispatch(loadingStarted());
+	store.dispatch(loadingStarted());
 
-  try {
-    await $fetch(REGISTER_URL, {
-      method: "POST",
+	try {
+		await $fetch(REGISTER_URL, {
+			method: "POST",
 
-      body: JSON.stringify({
-        firstname: user.firstname,
+			body: JSON.stringify({
+				firstname: user.firstname,
 
-        lastname: user.lastname,
+				lastname: user.lastname,
 
-        email: user.email,
+				email: user.email,
 
-        password: user.password,
-      }),
-    });
+				password: user.password,
+			}),
+		});
 
-    store.dispatch(errorOccured(""));
-  } catch (err) {
-    store.dispatch(errorOccured(err.message));
-  } finally {
-    store.dispatch(loadingFinished());
-  }
+		store.dispatch(errorOccured(""));
+	} catch (err) {
+		store.dispatch(errorOccured(err.message));
+	} finally {
+		store.dispatch(loadingFinished());
+	}
 }
 
 export async function signInUser(user) {
-  store.dispatch(loadingStarted());
+	store.dispatch(loadingStarted());
 
-  try {
-    // 1. login
+	try {
+		// 1. login
 
-    const url = `${LOGIN_URL}?email=${encodeURIComponent(
-      user.email
-    )}&password=${encodeURIComponent(user.password)}`;
+		const url = `${LOGIN_URL}?email=${encodeURIComponent(
+			user.email
+		)}&password=${encodeURIComponent(user.password)}`;
 
-    const { token, user_id } = await $fetch(url);
+		const { token, user_id } = await $fetch(url);
 
-    // 2. persist token + open socket
+		// 2. persist token + open socket
 
-    setAuth(token, user_id);
+		setAuth(token, user_id);
 
-    // 3. reuse the exact same bootstrap logic
+		// 3. reuse the exact same bootstrap logic
 
-    await bootstrapSession(user_id);
+		await bootstrapSession(user_id);
 
-    store.dispatch(errorOccured("")); // clear possible old errors
-  } catch (err) {
-    store.dispatch(errorOccured(err.message));
+		store.dispatch(errorOccured("")); // clear possible old errors
+	} catch (err) {
+		store.dispatch(errorOccured(err.message));
 
-    clearAuth();
-  } finally {
-    store.dispatch(loadingFinished());
-  }
+		clearAuth();
+	} finally {
+		store.dispatch(loadingFinished());
+	}
 }
 
 /* ---------------------- signUserOut ---------------------------------- */
 
 export async function signUserOut() {
-  await patchOnline(false); /* mark offline */
+	await patchOnline(false); /* mark offline */
 
-  clearAuth();
+	clearAuth();
 
-  store.dispatch(signOut());
+	store.dispatch(signOut());
 }
 
 /* -------------------- sendPasswordReminder --------------------------- */
 
 export function sendPasswordReminder(email) {
-  console.info("[TODO] Implement password reminder for", email);
+	console.info("[TODO] Implement password reminder for", email);
 
-  return Promise.resolve();
+	return Promise.resolve();
 }
 
 /* ------------------------------------------------------------------ */
@@ -279,86 +287,86 @@ export function sendPasswordReminder(email) {
 let hub = null;
 
 function openSocket() {
-  if (hub) return; // already connected / connecting
+	if (hub) return; // already connected / connecting
 
-  const token = localStorage.getItem(LS_TOKEN);
+	const token = localStorage.getItem(LS_TOKEN);
 
-  if (!token) return; // not logged-in → no live updates
+	if (!token) return; // not logged-in → no live updates
 
-  hub = new signalR.HubConnectionBuilder()
+	hub = new signalR.HubConnectionBuilder()
 
-    .withUrl(SOCKETS_URL, {
-      accessTokenFactory: () => token,
+		.withUrl(SOCKETS_URL, {
+			accessTokenFactory: () => token,
 
-      skipNegotiation: true, // no CORS pre-flight
+			skipNegotiation: true, // no CORS pre-flight
 
-      transport: signalR.HttpTransportType.WebSockets, // WebSocket only
-    })
+			transport: signalR.HttpTransportType.WebSockets, // WebSocket only
+		})
 
-    .withAutomaticReconnect()
+		.withAutomaticReconnect()
 
-    .configureLogging(signalR.LogLevel.Warning)
+		.configureLogging(signalR.LogLevel.Warning)
 
-    .build();
+		.build();
 
-  /* ---------------------------------------------------- */
+	/* ---------------------------------------------------- */
 
-  /* helper – SignalR sends a JSON-string → return POJO   */
+	/* helper – SignalR sends a JSON-string → return POJO   */
 
-  /* ---------------------------------------------------- */
+	/* ---------------------------------------------------- */
 
-  const parseMsg = (raw) => (typeof raw === "string" ? JSON.parse(raw) : raw);
+	const parseMsg = (raw) => (typeof raw === "string" ? JSON.parse(raw) : raw);
 
-  /* helper – does the row belong to me? */
+	/* helper – does the row belong to me? */
 
-  const isMe = (row) => row && row.user_id === localStorage.getItem(LS_USER_ID);
+	const isMe = (row) => row && row.user_id === localStorage.getItem(LS_USER_ID);
 
-  /* 1️⃣  Start first … */
+	/* 1️⃣  Start first … */
 
-  hub
-    .start()
+	hub
+		.start()
 
-    .then(() => {
-      console.info("[SignalR] connected, id:", hub.connectionId);
+		.then(() => {
+			console.info("[SignalR] connected, id:", hub.connectionId);
 
-      /* 2️⃣  … then register listeners ----------------------------- */
+			/* 2️⃣  … then register listeners ----------------------------- */
 
-      /* inside openSocket() – unchanged except the helper */
+			/* inside openSocket() – unchanged except the helper */
 
-      hub.on("fakebook.users.post", (raw) => {
-        store.dispatch(usersUpdated([parseMsg(raw)]));
-      });
+			hub.on("fakebook.users.post", (raw) => {
+				store.dispatch(usersUpdated([parseMsg(raw)]));
+			});
 
-      hub.on("fakebook.users.put", (raw) => {
-        const row = parseMsg(raw);
+			hub.on("fakebook.users.put", (raw) => {
+				const row = parseMsg(raw);
 
-        store.dispatch(usersUpdated([row]));
+				store.dispatch(usersUpdated([row]));
 
-        if (isMe(row)) store.dispatch(currentUserUpdated(row));
-      });
+				if (isMe(row)) store.dispatch(currentUserUpdated(row));
+			});
 
-      hub.on("fakebook.posts.post", (raw) => {
-        store.dispatch(postsUpdated([JSON.parse(raw)]));
-      });
+			hub.on("fakebook.posts.post", (raw) => {
+				store.dispatch(postsUpdated([JSON.parse(raw)]));
+			});
 
-      hub.on("fakebook.posts.put", (raw) => {
-        store.dispatch(postsUpdated([JSON.parse(raw)]));
-      });
-    })
+			hub.on("fakebook.posts.put", (raw) => {
+				store.dispatch(postsUpdated([JSON.parse(raw)]));
+			});
+		})
 
-    .catch((err) => {
-      console.warn("[SignalR] start failed:", err);
+		.catch((err) => {
+			console.warn("[SignalR] start failed:", err);
 
-      hub = null; // let auto-reconnect retry
-    });
+			hub = null; // let auto-reconnect retry
+		});
 
-  /* extra diagnostics ---------------------------------------------- */
+	/* extra diagnostics ---------------------------------------------- */
 
-  hub.onreconnecting((err) => console.warn("[SignalR] reconnecting:", err));
+	hub.onreconnecting((err) => console.warn("[SignalR] reconnecting:", err));
 
-  hub.onreconnected((id) => console.info("[SignalR] reconnected, id:", id));
+	hub.onreconnected((id) => console.info("[SignalR] reconnected, id:", id));
 
-  hub.onclose((err) => console.warn("[SignalR] closed:", err));
+	hub.onclose((err) => console.warn("[SignalR] closed:", err));
 }
 
 /* ------------------------------------------------------------------ */
@@ -368,25 +376,25 @@ function openSocket() {
 /* ------------------------------------------------------------------ */
 
 function clearAuth() {
-  /* forget in-memory copies */
+	/* forget in-memory copies */
 
-  authToken = null;
+	authToken = null;
 
-  authUser = null;
+	authUser = null;
 
-  /* forget persisted copies */
+	/* forget persisted copies */
 
-  localStorage.removeItem(LS_TOKEN); // "fakebook.jwt"
+	localStorage.removeItem(LS_TOKEN); // "fakebook.jwt"
 
-  localStorage.removeItem(LS_USER_ID); // "fakebook.user_id"
+	localStorage.removeItem(LS_USER_ID); // "fakebook.user_id"
 
-  /* close the hub if it exists */
+	/* close the hub if it exists */
 
-  if (hub) {
-    hub.stop(); // graceful shutdown → returns a promise we don’t await
+	if (hub) {
+		hub.stop(); // graceful shutdown → returns a promise we don’t await
 
-    hub = null;
-  }
+		hub = null;
+	}
 }
 
 /* ===================================================================== *
@@ -400,17 +408,17 @@ function clearAuth() {
 const LS_DB = "__fakebook_mock_db__";
 
 const DB = Object.assign(
-  {
-    currentUser: null,
+	{
+		currentUser: null,
 
-    users: [],
+		users: [],
 
-    posts: [],
+		posts: [],
 
-    messages: [],
-  },
+		messages: [],
+	},
 
-  JSON.parse(localStorage.getItem(LS_DB) || "{}")
+	JSON.parse(localStorage.getItem(LS_DB) || "{}")
 );
 
 const persist = () => localStorage.setItem(LS_DB, JSON.stringify(DB));
@@ -422,7 +430,7 @@ const nowISO = () => new Date().toISOString();
 /* --------------------- generic helpers ------------------------------- */
 
 export async function getImageURL(path) {
-  return `/assets/${path}`;
+	return `/assets/${path}`;
 }
 
 /* ------------------- current user subscriptions ---------------------- */
@@ -434,33 +442,33 @@ export async function getImageURL(path) {
 /* ------------------------------------------------------------------ */
 
 export function subscribeCurrentUser() {
-  let cancelled = false;
+	let cancelled = false;
 
-  (async () => {
-    try {
-      const token = localStorage.getItem(LS_TOKEN);
+	(async () => {
+		try {
+			const token = localStorage.getItem(LS_TOKEN);
 
-      const user_id = localStorage.getItem(LS_USER_ID);
+			const user_id = localStorage.getItem(LS_USER_ID);
 
-      if (!token || !user_id) return;
+			if (!token || !user_id) return;
 
-      const users = await $fetch(`${USERS_URL}?limit=-1`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+			const users = await $fetch(`${USERS_URL}?limit=-1`, {
+				headers: { Authorization: `Bearer ${token}` },
+			});
 
-      const meRow = users.find((u) => u.user_id === user_id);
+			const meRow = users.find((u) => u.user_id === user_id);
 
-      if (meRow && !cancelled) {
-        store.dispatch(currentUserUpdated(meRow));
-      }
-    } catch (err) {
-      console.warn("[subscribeCurrentUser] failed:", err.message);
-    }
-  })();
+			if (meRow && !cancelled) {
+				store.dispatch(currentUserUpdated(meRow));
+			}
+		} catch (err) {
+			console.warn("[subscribeCurrentUser] failed:", err.message);
+		}
+	})();
 
-  return () => {
-    cancelled = true;
-  };
+	return () => {
+		cancelled = true;
+	};
 }
 /* ------------------------------------------------------------------ */
 
@@ -468,25 +476,25 @@ export function subscribeCurrentUser() {
 
 /* ------------------------------------------------------------------ */
 async function patchOnline(isOnline) {
-  const token = localStorage.getItem(LS_TOKEN);
+	const token = localStorage.getItem(LS_TOKEN);
 
-  const user_id = localStorage.getItem(LS_USER_ID);
+	const user_id = localStorage.getItem(LS_USER_ID);
 
-  if (!token || !user_id) return;
+	if (!token || !user_id) return;
 
-  try {
-    await $fetch(USERS_URL, {
-      method: "PUT",
+	try {
+		await $fetch(USERS_URL, {
+			method: "PUT",
 
-      body: JSON.stringify({
-        user_id,
+			body: JSON.stringify({
+				user_id,
 
-        isOnline: isOnline ? 1 : 0, // DB needs 1/0
-      }),
-    });
-  } catch (err) {
-    console.warn("[online/offline] PUT failed:", err.message);
-  }
+				isOnline: isOnline ? 1 : 0, // DB needs 1/0
+			}),
+		});
+	} catch (err) {
+		console.warn("[online/offline] PUT failed:", err.message);
+	}
 }
 
 export const currentUserOnline = () => patchOnline(true);
@@ -496,29 +504,29 @@ export const currentUserOffline = () => patchOnline(false);
 /* ------------------------- users list -------------------------------- */
 
 export function subscribeUsers() {
-  let cancelled = false;
+	let cancelled = false;
 
-  (async () => {
-    try {
-      const token = localStorage.getItem(LS_TOKEN);
+	(async () => {
+		try {
+			const token = localStorage.getItem(LS_TOKEN);
 
-      const users = await $fetch(`${USERS_URL}?limit=-1`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      });
+			const users = await $fetch(`${USERS_URL}?limit=-1`, {
+				headers: token ? { Authorization: `Bearer ${token}` } : {},
+			});
 
-      if (!cancelled) {
-        store.dispatch(usersUpdated(users));
-      }
-    } catch (err) {
-      console.warn("[subscribeUsers] failed:", err.message);
-    }
-  })();
+			if (!cancelled) {
+				store.dispatch(usersUpdated(users));
+			}
+		} catch (err) {
+			console.warn("[subscribeUsers] failed:", err.message);
+		}
+	})();
 
-  /* return unsubscribe fn to keep same contract */
+	/* return unsubscribe fn to keep same contract */
 
-  return () => {
-    cancelled = true;
-  };
+	return () => {
+		cancelled = true;
+	};
 }
 
 /* ------------------------------------------------------------------ */
@@ -528,29 +536,29 @@ export function subscribeUsers() {
 /* ------------------------------------------------------------------ */
 
 export function subscribePosts() {
-  let cancelled = false;
+	let cancelled = false;
 
-  (async () => {
-    try {
-      const token = localStorage.getItem(LS_TOKEN);
+	(async () => {
+		try {
+			const token = localStorage.getItem(LS_TOKEN);
 
-      const arr = await $fetch(`${POSTS_URL}?limit=-1`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      });
+			const arr = await $fetch(`${POSTS_URL}?limit=-1`, {
+				headers: token ? { Authorization: `Bearer ${token}` } : {},
+			});
 
-      if (!cancelled) {
-        store.dispatch(postsLoaded(arr)); // full list once
-      }
-    } catch (err) {
-      console.warn("[subscribePosts] failed:", err.message);
-    }
-  })();
+			if (!cancelled) {
+				store.dispatch(postsLoaded(arr)); // full list once
+			}
+		} catch (err) {
+			console.warn("[subscribePosts] failed:", err.message);
+		}
+	})();
 
-  /* return unsubscribe fn (keeps contract identical) */
+	/* return unsubscribe fn (keeps contract identical) */
 
-  return () => {
-    cancelled = true;
-  };
+	return () => {
+		cancelled = true;
+	};
 }
 /* ------------------------------------------------------------------ */
 
@@ -559,80 +567,80 @@ export function subscribePosts() {
 /* ------------------------------------------------------------------ */
 
 export async function upload(post) {
-  /* fast path: in-memory → fall back to localStorage once */
+	/* fast path: in-memory → fall back to localStorage once */
 
-  const token = authToken || localStorage.getItem(LS_TOKEN);
+	const token = authToken || localStorage.getItem(LS_TOKEN);
 
-  const user_id = authUser || localStorage.getItem(LS_USER_ID);
+	const user_id = authUser || localStorage.getItem(LS_USER_ID);
 
-  if (!token || !user_id) throw new Error("Not authenticated");
+	if (!token || !user_id) throw new Error("Not authenticated");
 
-  /* Magic table requires the primary key up front */
+	/* Magic table requires the primary key up front */
 
-  const post_id = genId(); // already in backend.js
+	const post_id = genId(); // already in backend.js
 
-  const body = {
-    post_id, // ← fixes NOT NULL error
+	const body = {
+		post_id, // ← fixes NOT NULL error
 
-    user_id,
+		user_id,
 
-    text: post.text ?? "",
+		text: post.text ?? "",
 
-    photoURL: post.photoURL ?? "",
+		photoURL: post.photoURL ?? "",
 
-    youtubeURL: post.youtubeURL ?? "",
+		youtubeURL: post.youtubeURL ?? "",
 
-    isPhoto: post.isPhoto ? 1 : 0, // Magic expects 1/0
+		isPhoto: post.isPhoto ? 1 : 0, // Magic expects 1/0
 
-    isYoutube: post.isYoutube ? 1 : 0,
+		isYoutube: post.isYoutube ? 1 : 0,
 
-    likes: JSON.stringify(post.likes ?? []),
+		likes: JSON.stringify(post.likes ?? []),
 
-    comments: JSON.stringify(post.comments ?? []),
+		comments: JSON.stringify(post.comments ?? []),
 
-    timestamp: new Date().toISOString(), // optional but useful
-  };
+		timestamp: new Date().toISOString(), // optional but useful
+	};
 
-  /* POST /posts – let SignalR broadcast the newly created row */
+	/* POST /posts – let SignalR broadcast the newly created row */
 
-  await $fetch(POSTS_URL, {
-    method: "POST",
+	await $fetch(POSTS_URL, {
+		method: "POST",
 
-    body: JSON.stringify(body),
-  }); // $fetch adds Authorization
+		body: JSON.stringify(body),
+	}); // $fetch adds Authorization
 
-  /* --------------------------------------------------------------
+	/* --------------------------------------------------------------
 
     2️⃣  Update my users.posts array (DB + Redux)
 
      -------------------------------------------------------------- */
 
-  try {
-    const state = store.getState();
+	try {
+		const state = store.getState();
 
-    const me = state.currentUser; // already normalised
+		const me = state.currentUser; // already normalised
 
-    const currentPosts = me?.posts ?? [];
+		const currentPosts = me?.posts ?? [];
 
-    const updatedPosts = [...currentPosts, post_id];
+		const updatedPosts = [...currentPosts, post_id];
 
-    /* 2a. Persist to the server ---------------------------------- */
+		/* 2a. Persist to the server ---------------------------------- */
 
-    await $fetch(USERS_URL, {
-      method: "PUT",
+		await $fetch(USERS_URL, {
+			method: "PUT",
 
-      body: JSON.stringify({
-        user_id,
+			body: JSON.stringify({
+				user_id,
 
-        posts: JSON.stringify(updatedPosts),
-      }),
-    });
-  } catch (err) {
-    console.warn("[upload] failed to patch users.posts:", err.message);
-  }
-  /* keep old contract: caller expects { id } */
+				posts: JSON.stringify(updatedPosts),
+			}),
+		});
+	} catch (err) {
+		console.warn("[upload] failed to patch users.posts:", err.message);
+	}
+	/* keep old contract: caller expects { id } */
 
-  return { id: post_id };
+	return { id: post_id };
 }
 
 /* --------------------------------------------------------------
@@ -646,26 +654,26 @@ export async function upload(post) {
    -------------------------------------------------------------- */
 
 export async function updatePost(post, postID) {
-  const token = localStorage.getItem(LS_TOKEN);
+	const token = localStorage.getItem(LS_TOKEN);
 
-  if (!token) throw new Error("Not authenticated");
+	if (!token) throw new Error("Not authenticated");
 
-  /* 1. Map Redux-shape → Magic API shape ----------------------- */
+	/* 1. Map Redux-shape → Magic API shape ----------------------- */
 
-  const body = { post_id: postID }; // mandatory key
+	const body = { post_id: postID }; // mandatory key
 
-  if (post.comments !== undefined)
-    body.comments = JSON.stringify(post.comments);
+	if (post.comments !== undefined)
+		body.comments = JSON.stringify(post.comments);
 
-  if (post.likes !== undefined) body.likes = JSON.stringify(post.likes);
+	if (post.likes !== undefined) body.likes = JSON.stringify(post.likes);
 
-  /* 2. Fire PUT /posts ---------------------------------------- */
+	/* 2. Fire PUT /posts ---------------------------------------- */
 
-  await $fetch(POSTS_URL, {
-    method: "PUT",
+	await $fetch(POSTS_URL, {
+		method: "PUT",
 
-    body: JSON.stringify(body),
-  });
+		body: JSON.stringify(body),
+	});
 }
 
 /* =====================================================================
@@ -687,35 +695,35 @@ const IMAGE_UPLOAD_URL = `${API_BASE}/image`; // POST image
 /*  RETURNS: { url, path, ... } exactly what the Magic endpoint sends */
 
 export async function addFileToStorage(file) {
-  if (!file) throw new Error("No file given");
+	if (!file) throw new Error("No file given");
 
-  const fd = new FormData();
+	const fd = new FormData();
 
-  fd.append("file", file, file.name);
+	fd.append("file", file, file.name);
 
-  const res = await fetch(IMAGE_UPLOAD_URL, {
-    method: "POST",
+	const res = await fetch(IMAGE_UPLOAD_URL, {
+		method: "POST",
 
-    headers: {
-      ...authHeader(), // adds Authorization if we’re logged in
+		headers: {
+			...authHeader(), // adds Authorization if we’re logged in
 
-      // DO NOT set Content-Type – the browser will add multipart boundary
-    },
+			// DO NOT set Content-Type – the browser will add multipart boundary
+		},
 
-    body: fd,
-  });
+		body: fd,
+	});
 
-  if (!res.ok) {
-    const msg = await res.text();
+	if (!res.ok) {
+		const msg = await res.text();
 
-    throw new Error(`Image upload failed: ${msg || res.statusText}`);
-  }
+		throw new Error(`Image upload failed: ${msg || res.statusText}`);
+	}
 
-  /* Magic returns JSON with at least { url } (and sometimes path, size…) */
+	/* Magic returns JSON with at least { url } (and sometimes path, size…) */
 
-  const data = await res.json();
+	const data = await res.json();
 
-  return data; // UploadPhoto.jsx ignores, updateDatabase uses
+	return data; // UploadPhoto.jsx ignores, updateDatabase uses
 }
 
 /* --------------------------------------------------------------
@@ -733,105 +741,143 @@ export async function addFileToStorage(file) {
 /*  Updates DB and refreshes Redux                                 */
 
 export async function updateProfile(patch) {
-  const token = localStorage.getItem(LS_TOKEN);
+	const token = localStorage.getItem(LS_TOKEN);
 
-  const user_id = localStorage.getItem(LS_USER_ID);
+	const user_id = localStorage.getItem(LS_USER_ID);
 
-  if (!token || !user_id) throw new Error("Not authenticated");
+	if (!token || !user_id) throw new Error("Not authenticated");
 
-  /* Shape request body exactly like the Magic API expects -------- */
+	/* Shape request body exactly like the Magic API expects -------- */
 
-  const body = { user_id };
+	const body = { user_id };
 
-  if (patch.profilePictureURL !== undefined)
-    body.profilePictureURL = patch.profilePictureURL;
+	if (patch.profilePictureURL !== undefined)
+		body.profilePictureURL = patch.profilePictureURL;
 
-  if (patch.backgroundPictureURL !== undefined)
-    body.backgroundPictureURL = patch.backgroundPictureURL;
+	if (patch.backgroundPictureURL !== undefined)
+		body.backgroundPictureURL = patch.backgroundPictureURL;
 
-  if (patch.photos !== undefined)
-    // array → JSON string
+	if (patch.photos !== undefined)
+		// array → JSON string
 
-    body.photos = JSON.stringify(patch.photos);
+		body.photos = JSON.stringify(patch.photos);
 
-  /* Fire PUT /users --------------------------------------------- */
+	/* Fire PUT /users --------------------------------------------- */
 
-  const updatedRow = await $fetch(USERS_URL, {
-    method: "PUT",
+	const updatedRow = await $fetch(USERS_URL, {
+		method: "PUT",
 
-    body: JSON.stringify(body),
-  }); // $fetch auto-adds headers
+		body: JSON.stringify(body),
+	}); // $fetch auto-adds headers
 
-  /* Update Redux immediately for smooth UX ---------------------- */
+	/* Update Redux immediately for smooth UX ---------------------- */
 
-  store.dispatch(currentUserUpdated(updatedRow));
+	store.dispatch(currentUserUpdated(updatedRow));
 
-  store.dispatch(usersUpdated([updatedRow]));
+	store.dispatch(usersUpdated([updatedRow]));
 
-  /* When the hub later sends fakebook.users.put the same row will
+	/* When the hub later sends fakebook.users.put the same row will
 
      merge in again; that’s harmless. */
 }
+/* =====================================================================
 
-/* ------------------------- messages ---------------------------------- */
 
-export function subscribeMessages(kind) {
-  const uid = DB.currentUser?.id;
+      MESSAGES – read-only bootstrap (Magic back-end)
 
-  const inc = kind === "incoming";
 
-  setTimeout(() => {
-    const msgs = DB.messages.filter((m) =>
-      inc ? m.recipient === uid : m.sender === uid
-    );
+   ===================================================================== */
 
-    store.dispatch(
-      (inc ? incomingMessagesUpdated : outgoingMessagesUpdated)([...msgs])
-    );
-  }, 0);
+const MESSAGE_URL = `${API_BASE}/message`; // ← singular table name
 
-  return () => {};
+/* --------------------------------------------------------------
+
+   subscribeMessages(kind)
+
+
+   kind = "incoming" | "outgoing"
+
+   → issues ONE network call with server-side filter
+
+   -------------------------------------------------------------- */
+
+export function subscribeMessages(kind = "incoming") {
+	let cancelled = false;
+
+	(async () => {
+		try {
+			const uid = localStorage.getItem(LS_USER_ID);
+
+			if (!uid) return;
+
+			/* Magic filter param:  message.sender.eq=<uid>  etc. */
+
+			const filter =
+				kind === "incoming"
+					? `message.recipient.eq=${uid}`
+					: `message.sender.eq=${uid}`;
+
+			const url = `${MESSAGE_URL}?limit=-1&${filter}`;
+
+			const rows = await $fetch(url); // $fetch auto adds auth
+
+			if (!cancelled) {
+				const mapped = rows.map(mapRestMessage);
+
+				store.dispatch(
+					(kind === "incoming"
+						? incomingMessagesUpdated
+						: outgoingMessagesUpdated)(mapped)
+				);
+			}
+		} catch (err) {
+			console.warn("[subscribeMessages] failed:", err.message);
+		}
+	})();
+
+	return () => {
+		cancelled = true;
+	};
 }
-
 export function uploadMessage(msg) {
-  DB.messages.push({ ...msg, id: genId(), timestamp: nowISO(), isRead: false });
-  persist();
-  return Promise.resolve();
+	DB.messages.push({ ...msg, id: genId(), timestamp: nowISO(), isRead: false });
+	persist();
+	return Promise.resolve();
 }
 
 export function updateToBeRead(id) {
-  const m = DB.messages.find((m) => m.id === id);
-  if (m) {
-    m.isRead = true;
-    persist();
-  }
-  return Promise.resolve();
+	const m = DB.messages.find((m) => m.id === id);
+	if (m) {
+		m.isRead = true;
+		persist();
+	}
+	return Promise.resolve();
 }
 
 /* Ensure demo DB has at least one user */
 
 if (!DB.users.length) {
-  DB.users.push({
-    userID: genId(),
+	DB.users.push({
+		userID: genId(),
 
-    firstname: "Demo",
+		firstname: "Demo",
 
-    lastname: "User",
+		lastname: "User",
 
-    profilePictureURL: "fakebook-avatar.jpeg",
+		profilePictureURL: "fakebook-avatar.jpeg",
 
-    backgroundPictureURL: "background-server.jpg",
+		backgroundPictureURL: "background-server.jpg",
 
-    photos: [],
+		photos: [],
 
-    posts: [],
+		posts: [],
 
-    isOnline: 0,
+		isOnline: 0,
 
-    isEmailVerified: true,
+		isEmailVerified: true,
 
-    index: 0,
-  });
+		index: 0,
+	});
 
-  persist();
+	persist();
 }
