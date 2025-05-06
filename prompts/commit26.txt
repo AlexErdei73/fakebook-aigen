@@ -1,0 +1,147 @@
+Write the messaging related functions in backend.js with Magic back-end.
+
+$fetch does not need authorization header, because it already adds 
+it. We do not want to fetch or keep all the messages form the 
+database, just the incoming and outgoing messages of the current 
+user.
+
+We will use server generated time stamps
+
+I do not see any messages. What else I need to do?
+// prompts/images/commit26-fakebook-messages-empty.png
+
+I still do not see messages, how to debug this?
+
+Errors from the console
+// prompts/images/commit26-console-error.png
+
+Let's just focus first reading in the existing messages first. It 
+is going to be two separate call, one for the incoming and 
+another one for the outgoing messages. The URL is 
+https://alexerdei-team.us.ainiro.io/magic/modules/fakebook/message?limit=-1&message.sender.eq=67ffe1885cecb6903f8d58fb2617a0f29e93eb18662c2078df305f001cd426ee 
+the response is:
+[
+{
+"message_id": "lkvnht1aw3",
+"isRead": 1,
+"isPhoto": 0,
+"photoURL": "",
+"recipient": "4e1b8492aee3a42b3f98f5d56cf8eda88cfafb5d51d4350cd128c84c3d3a2348",
+"sender": "67ffe1885cecb6903f8d58fb2617a0f29e93eb18662c2078df305f001cd426ee",
+"text": "Hi\n",
+"timestamp": "2025-04-05 09:34:52"
+},
+{
+"message_id": "elr5qb4cjn",
+"isRead": 1,
+"isPhoto": 0,
+"photoURL": "",
+"recipient": "4e1b8492aee3a42b3f98f5d56cf8eda88cfafb5d51d4350cd128c84c3d3a2348",
+"sender": "67ffe1885cecb6903f8d58fb2617a0f29e93eb18662c2078df305f001cd426ee",
+"text": "Im very well, thank you",
+"timestamp": "2025-04-05 09:35:47"
+},
+{
+"message_id": "idufnd2zw4",
+"isRead": 1,
+"isPhoto": 0,
+"photoURL": "",
+"recipient": "4e1b8492aee3a42b3f98f5d56cf8eda88cfafb5d51d4350cd128c84c3d3a2348",
+"sender": "67ffe1885cecb6903f8d58fb2617a0f29e93eb18662c2078df305f001cd426ee",
+"text": "Hi again",
+"timestamp": "2025-04-05 10:37:56"
+},
+{
+"message_id": "q1u61uetss",
+"isRead": 1,
+"isPhoto": 0,
+"photoURL": "",
+"recipient": "4e1b8492aee3a42b3f98f5d56cf8eda88cfafb5d51d4350cd128c84c3d3a2348",
+"sender": "67ffe1885cecb6903f8d58fb2617a0f29e93eb18662c2078df305f001cd426ee",
+"text": "Not too late",
+"timestamp": "2025-04-05 10:40:21"
+},
+{
+"message_id": "djwp96uk87",
+"isRead": 1,
+"isPhoto": 0,
+"photoURL": "",
+"recipient": "22b56ab212ed51287f69e309eeb980d103a101344760c91dc4301066c16d23b0",
+"sender": "67ffe1885cecb6903f8d58fb2617a0f29e93eb18662c2078df305f001cd426ee",
+"text": "Hi, how are you doing?:D",
+"timestamp": "2025-04-09 12:41:17"
+},
+{
+"message_id": "yxofxxus8x",
+"isRead": 1,
+"isPhoto": 0,
+"photoURL": "",
+"recipient": "22b56ab212ed51287f69e309eeb980d103a101344760c91dc4301066c16d23b0",
+"sender": "67ffe1885cecb6903f8d58fb2617a0f29e93eb18662c2078df305f001cd426ee",
+"text": "Which pictures won't upload?",
+"timestamp": "2025-04-09 13:25:09"
+},
+{
+"message_id": "9zu95979pg",
+"isRead": 1,
+"isPhoto": 0,
+"photoURL": "",
+"recipient": "22b56ab212ed51287f69e309eeb980d103a101344760c91dc4301066c16d23b0",
+"sender": "67ffe1885cecb6903f8d58fb2617a0f29e93eb18662c2078df305f001cd426ee",
+"text": "It can handle jpg and not too crazy file names:D",
+"timestamp": "2025-04-09 13:26:00"
+},
+{
+"message_id": "6jvlyvpyav",
+"isRead": 1,
+"isPhoto": 0,
+"photoURL": "",
+"recipient": "51ac6a0a85117bce58a003662e0c4e3e77a3a24e7f10bdff52f910e662df8bb5",
+"sender": "67ffe1885cecb6903f8d58fb2617a0f29e93eb18662c2078df305f001cd426ee",
+"text": "Hi, are you there? It's an important fix, otherwise we just do not know:D",
+"timestamp": "2025-04-16 12:23:21"
+},
+{
+"message_id": "yec3lj4l2g",
+"isRead": 0,
+"isPhoto": 0,
+"photoURL": "",
+"recipient": "51ac6a0a85117bce58a003662e0c4e3e77a3a24e7f10bdff52f910e662df8bb5",
+"sender": "67ffe1885cecb6903f8d58fb2617a0f29e93eb18662c2078df305f001cd426ee",
+"text": "OK, no worries. Just let me know when you have done with the PR, so I can finish this thing finally:D It's basically done, I just add the CSS to not show the loading text spinning and fix the minor issues for a11y and SEO, which Lighthouse suggest. From that point I take it ready, it scores 99 on performance in Lighthouse, I think the rest is going to be 100, it works fine, so nothing else left to do apart from further features, which we won't do with this unless you want:D I also put these fixes in the original Firebase version, so that is going to be better too. ",
+"timestamp": "2025-04-17 16:28:49"
+},
+{
+"message_id": "odlgpbppf0",
+"isRead": 0,
+"isPhoto": 0,
+"photoURL": "",
+"recipient": "51ac6a0a85117bce58a003662e0c4e3e77a3a24e7f10bdff52f910e662df8bb5",
+"sender": "67ffe1885cecb6903f8d58fb2617a0f29e93eb18662c2078df305f001cd426ee",
+"text": "I will also start the AI generated version and make my post about that. That is the exact same thing, but it will be only made by AI with prompts. I give 3-4 days for that, because AI is supposed to make me a 10x developer:D It's going to be the exact same thing by the way. Then little rest and I start to work on something new, which I supposed to make popular for a target audience. This is perhaps more interesting to contribute on than this one, but it shows that you can work on my code with no issue.",
+"timestamp": "2025-04-17 16:34:22"
+},
+{
+"message_id": "5scwoixzwp",
+"isRead": 0,
+"isPhoto": 0,
+"photoURL": "",
+"recipient": "51ac6a0a85117bce58a003662e0c4e3e77a3a24e7f10bdff52f910e662df8bb5",
+"sender": "67ffe1885cecb6903f8d58fb2617a0f29e93eb18662c2078df305f001cd426ee",
+"text": "Thank you for your help anyway and I'm looking forward to getting your PR when you're done.",
+"timestamp": "2025-04-17 16:35:49"
+},
+{
+"message_id": "glkvocfxh5",
+"isRead": 0,
+"isPhoto": 0,
+"photoURL": "",
+"recipient": "22b56ab212ed51287f69e309eeb980d103a101344760c91dc4301066c16d23b0",
+"sender": "67ffe1885cecb6903f8d58fb2617a0f29e93eb18662c2078df305f001cd426ee",
+"text": "Hi there, how are you doing?",
+"timestamp": "2025-04-21 13:03:40"
+}
+]
+I show you the Firebase format for messages, so you can make a 
+mapping function. It's on the image. Write me the necessary code.
+// prompts/images/commit26-firebase-messages.png
