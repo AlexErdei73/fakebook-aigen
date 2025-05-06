@@ -1,0 +1,4 @@
+I have another bug. If I make a post, the posts table gets updated on the server, but not the posts field in my row 
+in the users table. Fix it please.
+
+2a is enough, because the SignalR updates the store
