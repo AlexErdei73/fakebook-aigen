@@ -45,6 +45,10 @@ export const usersSlice = createSlice({
 
         /* add other fields you expect to arrive partially … */
 
+        if (raw.posts !== undefined) patch.posts = JSON.parse(raw.posts);
+
+        if (raw.photos !== undefined) patch.photos = JSON.parse(raw.photos);
+
         state[idx] = { ...cur, ...patch }; // keep old fields
       });
     },
