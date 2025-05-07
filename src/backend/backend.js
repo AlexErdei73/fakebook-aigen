@@ -38,6 +38,8 @@ const MSG_URL = `${API}/message`;
 
 const IMAGE_URL = `${API}/image`;
 
+const PWD_URL = `${API}/pswreminder`; // GET ?email=<mail>
+
 const LS_TOKEN = "fakebook.jwt";
 
 const LS_UID = "fakebook.user_id";
@@ -291,11 +293,19 @@ export const signUserOut = async () => {
 // password reminder ------------------------------------------------------
 
 export const sendPasswordReminder = async (email) => {
-	// no real endpoint yet – stub keeps call-sites happy
+	store.dispatch(loadingStarted());
 
-	console.info("[TODO] send password reminder for", email);
+	try {
+		await $fetch(`${PWD_URL}?email=${encodeURIComponent(email)}`, {
+			method: "GET",
+		});
 
-	return Promise.resolve();
+		store.dispatch(errorOccured("")); // clear old errors
+	} catch (e) {
+		store.dispatch(errorOccured(e.message));
+	}
+
+	store.dispatch(loadingFinished());
 };
 
 // users subscription -----------------------------------------------------
