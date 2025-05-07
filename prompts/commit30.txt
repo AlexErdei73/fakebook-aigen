@@ -1,0 +1,19 @@
+Do you still remember exactly the backend.js file?
+
+Now I want you to clean it up a bit.
+    1.I only want to see one line comments
+    2.You only read the local storage in one function, which 
+    updates the global variables you use for the (current) user 
+    id and the token for the authorization of the requests
+    3.Let's keep everything working just unify the code style 
+    a bit for better readability
+Thank you
+
+Can I get the whole file?
+
+The rest of the code please?
+
+You forgot to provide the password reminder function for the 
+signatures.
+
+
