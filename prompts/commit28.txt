@@ -1,0 +1,94 @@
+Our previous conversation revolved around transforming the 
+Fakebook application from a Firebase-based social network to 
+one using AINIRO Magic as the backend. We systematically 
+addressed several critical components:
+
+    1.Authentication and Session Management
+    • Implemented robust session restoration
+    • Fixed user online/offline status tracking
+    • Ensured smooth login and logout processes
+
+    2.User and Profile Handling
+    • Created Redux slices for managing user data
+    • Fixed issues with user profile rendering
+    • Implemented photo and post synchronization
+    • Corrected user indexing for multiple users with same name
+
+    3.Messaging Capabilities
+    • Developed REST API integration for message retrieval
+    • Created SignalR listeners for real-time message updates
+    • Implemented functions for sending and marking messages as 
+    read
+    • Mapped Magic backend message format to existing frontend 
+    expectations
+
+    4.Backend Architecture
+    • Replaced Firebase with Magic REST endpoints
+    • Used SignalR for live updates across different application 
+    features
+    • Implemented generic fetch and authentication helpers
+    • Created mapping functions to normalize data from the new 
+    backend
+
+Throughout the process, we maintained a focus on minimal, surgical changes, ensuring that the existing application structure remained largely intact while upgrading the underlying technology. The goal was to create a seamless transition from the old backend to the new Magic-powered system, with improved performance and real-time capabilities.
+++++++++++++++++++++++++++++++++++++++++
+
+Three things are not working:
+
+    1.Online status updates
+    2.Message updates
+    3.I can send new messages, that's fine. When I am receiving 
+    the new message, it saves the new one, but I am losing old 
+    ones. I also cannot close the messaging window, when I have 
+    a new message, because it does not update the read status.
+
+Let's see first the main files again:
+// src/backend/backend.js
+2.usersSlice.js :
+// src/features/usersSlice/usersSlice.js
+3. currentUserSlice.js :
+// src/features/currentUserSlice/currentUsersSlice.js
+First the online status issue needs to be solved
+
+OK, the online status problem is sorted. The listener had an 
+undefined helper. I just needed to parse the string, which the 
+listener gets, so add a JSON.parse(raw).
+
+Let me give you the reducer and you give me back the full patched 
+code please.
+// src/features/incomingMessagesSlice/incomingMessagesSlice.js
+
+Let's do the same for the outgoing message slice.
+Old code:
+// src/features/outgoingMessagesSlice/outgoingMessagesSlice.js
+
+OK we still have the issue with the update of the read status.
+
+You misunderstand me. The name of the property is isRead in both 
+system. The problem is that it does not get updated for some 
+reason.
+
+can you rewrite the mapping function on a way if a property is 
+not in the object, it should not put it there?
+
+This mapping transforms from the Magic data to the Firebase like.
+
+OK, you made the timestamp iso in one of the previous snippets. 
+Can we keep it?
+
+You used the Magic timestamp format, just replaced the " " to 
+"T" and added the "Z" to the end. Do it like that please.
+
+Can we check if timestamp is a valid date and only convert it, 
+in the other case we should use current UTC date
+
+I do not want the timestamp if it's missing
+
+can we write the map function with a loop which only modifies 
+the existing fields?
+
+I think we should get rid off the fakebook.message.put listener, 
+because its only task is to update the isRead property, when it's 
+updated in the server. We can do an optimistic update in Redux 
+directly instead in this case. Do these for me please.
+
