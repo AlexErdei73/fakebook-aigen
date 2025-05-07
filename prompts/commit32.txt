@@ -1,0 +1,6 @@
+We are going to make another feature, which is the password 
+reminder email. We need to write the function, which will send a 
+request to the GET pswreminder endpoint. It has only one 
+parameter, which is the email. The user gets the email with a 
+link, which is valid for an hour and takes them to a site to 
+change the password.
