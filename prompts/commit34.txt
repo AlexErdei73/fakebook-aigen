@@ -1,0 +1,10 @@
+The last fix before deployment is the online status, when someone 
+closes the browser window, without signing out. Although we 
+handle the event which is visibility change to send the request, 
+the browser closes before the request is sent. Fix this in the 
+backend.js file and remove the unnecessary before unload listener 
+from the UserAccount component.
+
+How about if someone just hides the browser window on mobile for 
+example?
+
