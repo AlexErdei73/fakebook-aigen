@@ -15,10 +15,10 @@ import FriendsListPage from "./FriendsListPage";
 /* Router */
 
 import {
-  BrowserRouter as Router,
-  Switch,
-  Route,
-  useLocation,
+	BrowserRouter as Router,
+	Switch,
+	Route,
+	useLocation,
 } from "react-router-dom";
 
 /* Layout */
@@ -30,19 +30,19 @@ import Container from "react-bootstrap/Container";
 import { useDispatch, useSelector } from "react-redux";
 
 import {
-  friendsListPageSet,
-  profileLinkSet,
-  watchSet,
+	friendsListPageSet,
+	profileLinkSet,
+	watchSet,
 } from "../features/accountPage/accountPageSlice";
 
 /* Mock-backend helpers */
 
 import {
-  currentUserOffline,
-  currentUserOnline,
-  subscribeCurrentUser,
-  subscribeUsers,
-  subscribePosts,
+	currentUserOffline,
+	currentUserOnline,
+	subscribeCurrentUser,
+	subscribeUsers,
+	subscribePosts,
 } from "../backend/backend";
 
 /* ------------------------------------------------------------------ */
@@ -52,158 +52,139 @@ import {
 /* ------------------------------------------------------------------ */
 
 const RouteStateSync = () => {
-  const dispatch = useDispatch();
+	const dispatch = useDispatch();
 
-  const location = useLocation();
+	const location = useLocation();
 
-  useEffect(() => {
-    const { pathname } = location;
+	useEffect(() => {
+		const { pathname } = location;
 
-    /* friends list page */
+		/* friends list page */
 
-    dispatch(friendsListPageSet(pathname.startsWith("/fakebook/friends/list")));
+		dispatch(friendsListPageSet(pathname.startsWith("/fakebook/friends/list")));
 
-    /* watch page (videos feed) */
+		/* watch page (videos feed) */
 
-    dispatch(watchSet(pathname.startsWith("/fakebook/watch")));
-  }, [location, dispatch]);
+		dispatch(watchSet(pathname.startsWith("/fakebook/watch")));
+	}, [location, dispatch]);
 
-  return null; // renders nothing
+	return null; // renders nothing
 };
 
 /* ------------------------------------------------------------------ */
 
 const UserAccount = () => {
-  const dispatch = useDispatch();
+	const dispatch = useDispatch();
 
-  /* Redux selectors */
+	/* Redux selectors */
 
-  const profileLink = useSelector((state) => state.accountPage.profileLink);
+	const profileLink = useSelector((state) => state.accountPage.profileLink);
 
-  const currentUser = useSelector((state) => state.currentUser);
+	const currentUser = useSelector((state) => state.currentUser);
 
-  const users = useSelector((state) => state.users);
+	const users = useSelector((state) => state.users);
 
-  /* -------------------------------------------------- */
+	/* -------------------------------------------------- */
 
-  /* Firestore-like subscriptions & online/offline flag */
+	/*           Firestore-like subscriptions             */
 
-  /* -------------------------------------------------- */
+	/* -------------------------------------------------- */
 
-  useEffect(() => {
-    const unsubCurrentUser = subscribeCurrentUser();
+	useEffect(() => {
+		const unsubCurrentUser = subscribeCurrentUser();
 
-    const unsubUsers = subscribeUsers();
+		const unsubUsers = subscribeUsers();
 
-    const unsubPosts = subscribePosts();
+		const unsubPosts = subscribePosts();
 
-    /* mark user online */
+		/* mark user online */
 
-    currentUserOnline();
+		currentUserOnline();
 
-    /* window closed or refreshed */
+		/* cleanup */
 
-    const beforeUnload = () => currentUserOffline();
+		return () => {
+			unsubCurrentUser();
 
-    window.addEventListener("beforeunload", beforeUnload);
+			unsubUsers();
 
-    /* tab visibility switch */
+			unsubPosts();
+		};
+	}, []);
 
-    const visChange = () =>
-      document.visibilityState === "visible"
-        ? currentUserOnline()
-        : currentUserOffline();
+	/* -------------------------------------------------- */
 
-    document.addEventListener("visibilitychange", visChange);
+	/* Build unique profile link (.index appended once)   */
 
-    /* cleanup */
+	/* -------------------------------------------------- */
 
-    return () => {
-      unsubCurrentUser();
+	useEffect(() => {
+		if (!currentUser) return;
 
-      unsubUsers();
+		/* remove any existing trailing ".number" */
 
-      unsubPosts();
+		const base = profileLink.replace(/\.\d+$/, "");
 
-      window.removeEventListener("beforeunload", beforeUnload);
+		const newLink =
+			currentUser.index && currentUser.index > 0
+				? `${base}.${currentUser.index}`
+				: base;
 
-      document.removeEventListener("visibilitychange", visChange);
-    };
-  }, []);
+		dispatch(profileLinkSet(newLink));
+	}, [currentUser, profileLink, dispatch]);
 
-  /* -------------------------------------------------- */
+	/* Loading guard */
 
-  /* Build unique profile link (.index appended once)   */
+	if (!currentUser || users.length === 0) {
+		return <div>…Loading</div>;
+	}
 
-  /* -------------------------------------------------- */
+	/* -------------------------------------------------- */
 
-  useEffect(() => {
-    if (!currentUser) return;
+	/* Render                                             */
 
-    /* remove any existing trailing ".number" */
+	/* -------------------------------------------------- */
 
-    const base = profileLink.replace(/\.\d+$/, "");
+	return (
+		<div className="bg-200 vw-100 main-container overflow-hidden">
+			<Container className="w-100 p-0" fluid>
+				<Router>
+					<RouteStateSync />
 
-    const newLink =
-      currentUser.index && currentUser.index > 0
-        ? `${base}.${currentUser.index}`
-        : base;
+					<TitleBar />
 
-    dispatch(profileLinkSet(newLink));
-  }, [currentUser, profileLink, dispatch]);
+					<Switch>
+						{/* Friends list ------------------------------------------------ */}
 
-  /* Loading guard */
+						<Route path="/fakebook/friends/list" component={FriendsListPage} />
 
-  if (!currentUser || users.length === 0) {
-    return <div>…Loading</div>;
-  }
+						{/* Single photo ----------------------------------------------- */}
 
-  /* -------------------------------------------------- */
+						<Route path="/fakebook/photo/:userID/:n" component={PhotoViewer} />
 
-  /* Render                                             */
+						{/* Watch (video feed) ----------------------------------------- */}
 
-  /* -------------------------------------------------- */
+						<Route
+							path="/fakebook/watch"
+							render={(props) => <HomePage {...props} className="pt-5" />}
+						/>
 
-  return (
-    <div className='bg-200 vw-100 main-container overflow-hidden'>
-      <Container className='w-100 p-0' fluid>
-        <Router>
-          <RouteStateSync />
+						{/* User profile ----------------------------------------------- */}
 
-          <TitleBar />
+						<Route path="/fakebook/:userName" component={Profile} />
 
-          <Switch>
-            {/* Friends list ------------------------------------------------ */}
+						{/* News-feed root --------------------------------------------- */}
 
-            <Route path='/fakebook/friends/list' component={FriendsListPage} />
-
-            {/* Single photo ----------------------------------------------- */}
-
-            <Route path='/fakebook/photo/:userID/:n' component={PhotoViewer} />
-
-            {/* Watch (video feed) ----------------------------------------- */}
-
-            <Route
-              path='/fakebook/watch'
-              render={(props) => <HomePage {...props} className='pt-5' />}
-            />
-
-            {/* User profile ----------------------------------------------- */}
-
-            <Route path='/fakebook/:userName' component={Profile} />
-
-            {/* News-feed root --------------------------------------------- */}
-
-            <Route
-              path='/fakebook'
-              exact
-              render={(props) => <HomePage {...props} className='pt-5' />}
-            />
-          </Switch>
-        </Router>
-      </Container>
-    </div>
-  );
+						<Route
+							path="/fakebook"
+							exact
+							render={(props) => <HomePage {...props} className="pt-5" />}
+						/>
+					</Switch>
+				</Router>
+			</Container>
+		</div>
+	);
 };
 
 export default UserAccount;

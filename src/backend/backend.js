@@ -153,34 +153,22 @@ const openSocket = () => {
 		});
 };
 
-// auth helpers -----------------------------------------------------------
-
-const setAuth = (t, u) => {
-	authToken = t;
-	authUser = u;
-	saveAuthToStorage(t, u);
-	openSocket();
-};
-
-const clearAuth = () => {
-	authToken = null;
-	authUser = null;
-	clearAuthStorage();
-	if (hub) {
-		hub.stop();
-		hub = null;
-	}
-};
-
 // presence ---------------------------------------------------------------
 
-const patchOnline = async (on) => {
+// patchOnline(on, keep = false)  ← keep=true will add keepalive: true
+
+const patchOnline = async (on, keep = false) => {
 	if (!authUser) return;
 
 	try {
-		await $fetch(USERS_URL, {
+		await fetch(USERS_URL, {
 			method: "PUT",
+
+			headers: { "Content-Type": "application/json", ...authHeader() },
+
 			body: JSON.stringify({ user_id: authUser, isOnline: on ? 1 : 0 }),
+
+			...(keep ? { keepalive: true } : {}),
 		});
 	} catch (e) {
 		console.warn("[online] PUT failed:", e.message);
@@ -190,6 +178,77 @@ const patchOnline = async (on) => {
 export const currentUserOnline = () => patchOnline(true);
 
 export const currentUserOffline = () => patchOnline(false);
+
+// leave / background handlers -------------------------------------------
+
+let leaveHandlerInstalled = false;
+
+const sendOfflineKeepalive = () => patchOnline(false, true);
+
+const handleVisibility = () => {
+	if (document.visibilityState === "hidden") sendOfflineKeepalive();
+
+	if (document.visibilityState === "visible") currentUserOnline();
+};
+
+const installLeaveHandlers = () => {
+	if (leaveHandlerInstalled) return;
+
+	window.addEventListener("pagehide", sendOfflineKeepalive); // tab / window close
+
+	window.addEventListener("freeze", sendOfflineKeepalive); // page-lifecycle freeze
+
+	window.addEventListener("resume", currentUserOnline); // page-lifecycle resume
+
+	document.addEventListener("visibilitychange", handleVisibility);
+
+	leaveHandlerInstalled = true;
+};
+
+const removeLeaveHandlers = () => {
+	if (!leaveHandlerInstalled) return;
+
+	window.removeEventListener("pagehide", sendOfflineKeepalive);
+
+	window.removeEventListener("freeze", sendOfflineKeepalive);
+
+	window.removeEventListener("resume", currentUserOnline);
+
+	document.removeEventListener("visibilitychange", handleVisibility);
+
+	leaveHandlerInstalled = false;
+};
+
+// setAuth … add
+
+const setAuth = (t, u) => {
+	authToken = t;
+
+	authUser = u;
+
+	saveAuthToStorage(t, u);
+
+	openSocket();
+
+	installLeaveHandlers(); // ← here
+};
+
+// clearAuth … add
+
+const clearAuth = () => {
+	authToken = null;
+
+	authUser = null;
+
+	clearAuthStorage();
+
+	if (hub) {
+		hub.stop();
+		hub = null;
+	}
+
+	removeLeaveHandlers(); // ← here
+};
 
 // bootstrap after login/restore -----------------------------------------
 
