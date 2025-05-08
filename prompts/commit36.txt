@@ -1,0 +1,13 @@
+Audio description:
+"How can I deploy my previous project on GitHub pages? Take into 
+account that it's a single page application and GitHub pages is 
+not the best for deploying these or you need to use some kind of 
+tool for React apps. Let me the detailed answer, please."
+
+What are the differences for Vite build?
+
+// The deployment worked at this point, but the AI (o3) eliminated 
+// the usage of the isFriendsListPage field from the accountPage 
+// slice in the Redux store. This field determines in the UI if it 
+// shows the Profile component or the FriendsListPage component.
+// I manually debugged the UserAccount component.
