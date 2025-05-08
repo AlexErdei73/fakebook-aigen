@@ -45,6 +45,37 @@
   left: 0;
 }
 
+.custom-drop-down-btn .dropdown-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.7em; /* as in your original custom-drop-down-btn styling */
+  height: 1.7em;
+  padding: 0 !important; /* Remove Bootstrap padding */
+  background: #e9ecef !important;
+  border-radius: 1.7em;
+  border: 1px solid #e9ecef !important;
+  box-shadow: none;
+  /* You can adjust height/width for your visual design */
+}
+
+/* Target the caret in the dropdown toggle and move it left and down */
+
+.custom-drop-down-btn .dropdown-toggle::after {
+  margin-left: 0 !important; /* Remove any left margin */
+  transform: translate(0, 2px); /* Move caret left (0px) and down (+2px) */
+  /* Try larger/smaller values if needed */
+}
+
+/* If you want to be very precise... */
+
+.custom-drop-down-btn .dropdown-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 !important;
+}
+
 @media (max-width: 640px) {
   .spaceing,
   .first {

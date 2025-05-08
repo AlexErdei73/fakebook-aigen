@@ -1,5 +1,5 @@
 import React, { useRef } from "react";
-import { Navbar, Nav, Dropdown, DropdownButton } from "react-bootstrap";
+import { Navbar, Nav, Dropdown } from "react-bootstrap";
 import { Link } from "react-router-dom";
 import { VscHome } from "react-icons/vsc";
 import { FaFacebook } from "react-icons/fa";
@@ -14,6 +14,7 @@ import { useEffect } from "react";
 import { handleClickLink } from "./helper";
 import { linkUpdated } from "../features/link/linkSlice";
 import { friendsListPageSet } from "../features/accountPage/accountPageSlice";
+import CustomToggle from "./CustomToggle";
 
 const TitleBar = () => {
   const refs = {
@@ -97,35 +98,39 @@ const TitleBar = () => {
             </Link>
           </Nav.Item>
           <Nav.Item className='align-self-center'>
-            <DropdownButton
-              title=''
-              className='mr-4 custom-drop-down-btn'
-              menuAlign='right'
-            >
-              <Dropdown.Item
-                as={Link}
-                to={profileLink}
-                onClick={closeFriendsListPage}
-              >
-                <ProfileLink
-                  user={user}
-                  size='60'
-                  fullname='true'
-                  bold='true'
-                />
-              </Dropdown.Item>
-              <Dropdown.Divider />
-              <Dropdown.Item
-                as={Link}
-                to='/'
-                onClick={handleClick}
-                className='p-0'
-              >
-                <ImExit fontSize='1.5em' className='mx-4' />
-                <span>Log Out</span>
-                <div style={{ width: "20em" }}></div>
-              </Dropdown.Item>
-            </DropdownButton>
+            <Dropdown className='mr-4 custom-drop-down-btn'>
+              <Dropdown.Toggle as={CustomToggle} />
+
+              <Dropdown.Menu alignRight>
+                <Dropdown.Item
+                  as={Link}
+                  to={profileLink}
+                  onClick={closeFriendsListPage}
+                >
+                  <ProfileLink
+                    user={user}
+                    size='60'
+                    fullname='true'
+                    bold='true'
+                  />
+                </Dropdown.Item>
+
+                <Dropdown.Divider />
+
+                <Dropdown.Item
+                  as={Link}
+                  to='/'
+                  onClick={handleClick}
+                  className='p-0'
+                >
+                  <ImExit fontSize='1.5em' className='mx-4' />
+
+                  <span>Log Out</span>
+
+                  <div style={{ width: "20em" }}></div>
+                </Dropdown.Item>
+              </Dropdown.Menu>
+            </Dropdown>
           </Nav.Item>
         </Nav>
       </Navbar>
