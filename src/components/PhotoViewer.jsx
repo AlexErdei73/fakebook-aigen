@@ -23,21 +23,21 @@ const PhotoViewer = () => {
   }, [location]);
 
   const handleSelect = (selectedIndex, e) => {
-    history.push(`/fakebook/photo/${userID}/${selectedIndex}`);
+    history.push(`/photo/${userID}/${selectedIndex}`);
   };
 
   return (
     <Row
-      className="bg-200"
+      className='bg-200'
       style={{
         position: "relative",
         top: "50px",
         height: "89vh",
       }}
     >
-      <Col md={9} className="h-100" style={{ backgroundColor: "black" }}>
+      <Col md={9} className='h-100' style={{ backgroundColor: "black" }}>
         <Carousel
-          className="w-100 h-100"
+          className='w-100 h-100'
           interval={null}
           indicators={false}
           activeIndex={activeIndex}
@@ -54,7 +54,7 @@ const PhotoViewer = () => {
               >
                 <StorageImage
                   storagePath={`/${userID}/${photo.fileName}`}
-                  alt=""
+                  alt=''
                   style={{
                     position: "absolute",
                     top: "50%",

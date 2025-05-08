@@ -1,12 +1,15 @@
 {
   "name": "fakebook-ainiro",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.1.0",
+  "homepage": "https://alexerdei73.github.io/fakebook-aigen",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "predeploy": "npm run build",
+    "deploy": "gh-pages -d dist"
   },
   "dependencies": {
     "@microsoft/signalr": "^8.0.7",
@@ -18,11 +21,11 @@
     "react-icons": "^4.2.0",
     "react-player": "^2.12.0",
     "react-redux": "^8.0.2",
-    "react-router-dom": "^5.2.0",
-    "signalr": "^2.4.3"
+    "react-router-dom": "^5.2.0"
   },
   "devDependencies": {
     "@preact/preset-vite": "^2.9.3",
+    "gh-pages": "^6.3.0",
     "vite": "^6.0.5"
   }
 }

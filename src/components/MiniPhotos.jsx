@@ -22,7 +22,7 @@ const MiniPhotos = (props) => {
   const userSlug =
     user.index && user.index > 0 ? `${slugBase}.${user.index}` : slugBase;
 
-  const photosLink = `/fakebook/${userSlug}/Photos`;
+  const photosLink = `/${userSlug}/Photos`;
 
   /* ---------------------------------------------------------------- */
 
@@ -59,7 +59,7 @@ const MiniPhotos = (props) => {
                   }}
                 >
                   <Link
-                    to={`/fakebook/photo/${userID}/${index}`}
+                    to={`/photo/${userID}/${index}`}
                     className='text-body'
                     onClick={handleClick}
                     tabIndex='-1'

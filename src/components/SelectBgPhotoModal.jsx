@@ -16,10 +16,10 @@ const SelectBgPhotoModal = (props) => {
         {photos.map((photo, index) => {
           return (
             <StorageImage
-              className="m-1"
-              width="31%"
-              height="90px"
-              alt=""
+              className='m-1'
+              width='31%'
+              height='90px'
+              alt=''
               key={index}
               id={index}
               storagePath={`/${userID}/${photo.fileName}`}

@@ -17,50 +17,50 @@ const FriendCard = (props) => {
   function handleClick() {
     history.push(
       user.index && user.index > 0
-        ? `/fakebook/${user.lastname}.${user.firstname}.${user.index}`
-        : `/fakebook/${user.lastname}.${user.firstname}`
+        ? `/${user.lastname}.${user.firstname}.${user.index}`
+        : `/${user.lastname}.${user.firstname}`
     );
   }
 
   return (
-    <Col xs={6} className="my-3">
+    <Col xs={6} className='my-3'>
       <OverlayTrigger
-        placement="auto"
+        placement='auto'
         show={showOverlay}
         overlay={
           <div
-            className="popup-card"
+            className='popup-card'
             onMouseEnter={() => setShowOverlay(true)}
             onMouseLeave={() => setShowOverlay(false)}
             onClick={handleClick}
           >
-            <div className="m-3">
-              <CircularImage size="120" url={user.profilePictureURL} />
+            <div className='m-3'>
+              <CircularImage size='120' url={user.profilePictureURL} />
             </div>
-            <h4 className="name-tag">
+            <h4 className='name-tag'>
               <b>{userName}</b>
             </h4>
           </div>
         }
       >
         <button
-          type="button"
+          type='button'
           onClick={handleClick}
-          className="friend-btn"
-          tabIndex="-1"
+          className='friend-btn'
+          tabIndex='-1'
         >
           <StorageImage
             storagePath={user.profilePictureURL}
-            width="90px"
-            height="90px"
-            alt=""
-            className="profile-picture"
+            width='90px'
+            height='90px'
+            alt=''
+            className='profile-picture'
             onMouseEnter={() => setShowOverlay(true)}
             onMouseLeave={() => setShowOverlay(false)}
           />
         </button>
       </OverlayTrigger>
-      <button type="button" className="ml-3 friend-btn" onClick={handleClick}>
+      <button type='button' className='ml-3 friend-btn' onClick={handleClick}>
         <b>{userName}</b>
       </button>
     </Col>

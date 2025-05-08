@@ -28,15 +28,15 @@ const Photos = (props) => {
   }, [activeLink, photosLinkRef, setActiveLink]);
 
   return (
-    <Card variant="light" className="w-100">
+    <Card variant='light' className='w-100'>
       <Card.Body>
         <Card.Title>
-          <Link to={url} className="text-body">
+          <Link to={url} className='text-body'>
             <b>Photos</b>
           </Link>
           {isCurrentUser && (
             <Button
-              variant="link"
+              variant='link'
               style={{
                 textDecoration: "none",
                 float: "right",
@@ -47,14 +47,14 @@ const Photos = (props) => {
             </Button>
           )}
         </Card.Title>
-        <Row className="w-100">
+        <Row className='w-100'>
           {photos.map((photo, index) => {
             return (
-              <Col key={index} xs={6} sm={4} md={3} lg={2} className="p-1">
-                <Link to={`/fakebook/photo/${userID}/${index}`}>
+              <Col key={index} xs={6} sm={4} md={3} lg={2} className='p-1'>
+                <Link to={`/photo/${userID}/${index}`}>
                   <ResponsiveImage
-                    width="100%"
-                    height="100%"
+                    width='100%'
+                    height='100%'
                     userID={userID}
                     photo={photo}
                     index={index}
