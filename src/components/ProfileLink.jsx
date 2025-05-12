@@ -18,14 +18,14 @@ const ProfileLink = (props) => {
         color: "inherited",
       }}
     >
-      <Col xs="auto" className="px-2 ml-2">
+      <Col xs='auto' className='px-2 ml-2'>
         <CircularImage
           size={size}
           url={profilePictureURL}
           isOnline={isOnline}
         />
       </Col>
-      <Col className="align-self-center p-0" style={{ color: "inherited" }}>
+      <Col className='align-self-center p-0 text-dark'>
         {bold === "true" ? <b>{name}</b> : name}
       </Col>
     </Row>
